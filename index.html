@@ -1,143 +1,790 @@
-// ======================================================
-// ButterflyMusic Freunde App Backend
-// ======================================================
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ButterflyMusic Freunde App</title>
+<style>
+@keyframes pulseGlow {
+  0%   { box-shadow: 0 0 8px rgba(255,0,217,0.6), 0 0 30px rgba(0,255,255,0.2); }
+  50%  { box-shadow: 0 0 16px rgba(255,0,217,1),   0 0 50px rgba(0,255,255,0.5); }
+  100% { box-shadow: 0 0 8px rgba(255,0,217,0.6), 0 0 30px rgba(0,255,255,0.2); }
+}
+@keyframes sparkle {
+  0%   { opacity: 0; transform: translateY(0) scale(1); }
+  50%  { opacity: 1; transform: translateY(-10px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.8); }
+}
 
-import express from "express";
-import cors from "cors";
-import bodyParser from "body-parser";
+:root {
+  --bg-dark: #050108;
+  --neon-pink: #ff00d9;
+  --panel-bg: rgba(20, 8, 30, 0.55);
+  --panel-border: rgba(255, 0, 217, 0.4);
+  --text-main: #fff;
+  --text-dim: #8a8a8a;
+  --input-bg: rgba(0,0,0,0.4);
+  --input-border: rgba(0,255,255,0.4);
+  --panel-bg-hard: rgba(0,0,0,0.6);
+}
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+* {
+  box-sizing: border-box;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", Roboto, "Segoe UI", sans-serif;
+  color: var(--text-main);
+}
 
-// --- In-Memory Datenbank (temporär) ---
-const users = [];
-const messages = [
-  {
-    fromUserId: "0",
-    avatar: "🦋",
-    displayName: "DeepButterflyMusic",
-    neonColor: "#ff00d9",
-    role: "owner",
-    text: "Willkommen in der ButterflyMusic Freunde App 💜 Bitte bleibt respektvoll.",
-    translatedText: "Willkommen in der ButterflyMusic Freunde App 💜 Bitte bleibt respektvoll.",
-    time: new Date().toISOString(),
-  },
-];
+body {
+  margin: 0;
+  background-color: var(--bg-dark);
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255,0,217,0.22) 0%, transparent 60%),
+    radial-gradient(circle at 80% 30%, rgba(0,255,255,0.18) 0%, transparent 60%),
+    radial-gradient(circle at 50% 80%, rgba(140,0,255,0.22) 0%, transparent 60%),
+    repeating-radial-gradient(circle at 40% 60%, rgba(255,255,255,0.15) 0 1px, transparent 1px 3px);
+  background-blend-mode: screen;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
 
-// ======================================================
-// 1️⃣ Registrierung
-// ======================================================
-app.post("/api/register", (req, res) => {
-  const { name, email, password, language, avatar, neonColor } = req.body;
+.sparkle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255,0,217,0.7) 40%, transparent 70%);
+  box-shadow:
+    0 0 6px rgba(255,255,255,0.9),
+    0 0 20px rgba(255,0,217,0.8),
+    0 0 40px rgba(0,255,255,0.5);
+  animation: sparkle 3s linear infinite;
+}
+.s1 { left: 10%; top: 20%; animation-delay: 0s; }
+.s2 { left: 80%; top: 30%; animation-delay: 1s; }
+.s3 { left: 60%; top: 80%; animation-delay: 2s; }
+.s4 { left: 30%; top: 65%; animation-delay: 1.5s; }
+.s5 { left: 50%; top: 10%; animation-delay: 0.5s; }
 
-  if (!name || !email || !password)
-    return res.status(400).json({ error: "Fehlende Angaben." });
+header {
+  background: rgba(0,0,0,0.5);
+  border-bottom: 1px solid rgba(255,0,217,0.4);
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.2),
+    0 20px 80px rgba(0,0,0,0.9);
+  padding: 0.8rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 5;
+}
 
-  // Geschützte Namen
-  const blockedNames = [
-    "pimmel",
-    "arsch",
-    "fuck",
-    "DeepButterflyMusic",
-    "Dethoxia",
-    "DarkInfernal",
-    "Dethox",
-  ];
+.app-left {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
+}
+.logo-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #fff 0%, #ffd5fb 15%, #ff00d9 40%, rgba(0,0,0,0) 70%);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.9),
+    0 0 30px rgba(0,255,255,0.5),
+    0 20px 60px rgba(0,0,0,0.9);
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #050108;
+  text-shadow: 0 0 4px rgba(255,255,255,0.8);
+  animation: pulseGlow 4s infinite;
+}
+.app-title-block {
+  line-height: 1.2rem;
+}
+.app-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-shadow:
+    0 0 8px #ff00d9,
+    0 0 20px cyan,
+    0 0 40px purple;
+}
+.app-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
 
-  if (blockedNames.some((w) => name.toLowerCase().includes(w.toLowerCase()))) {
-    return res.status(403).json({ error: "Name ist nicht erlaubt oder geschützt." });
+.app-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.user-info {
+  font-size: 0.7rem;
+  line-height: 1rem;
+  text-align: right;
+  min-width: 120px;
+}
+.user-info .name {
+  font-weight: 600;
+  color: #ff00d9;
+  text-shadow:
+    0 0 6px #ff00d9,
+    0 0 20px cyan;
+}
+.lang-select-wrap label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+  text-align: right;
+  display: block;
+}
+.lang-select-wrap select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  outline: none;
+  min-width: 100px;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 1rem;
+  padding: 1rem;
+  position: relative;
+  z-index: 4;
+}
+
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.8rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.25),
+    0 30px 120px rgba(0,0,0,0.9);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.panel-header {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255,0,217,0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-header .title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1rem;
+}
+.title-main {
+  color: var(--text-main);
+  text-shadow:
+    0 0 8px #ff00d9,
+    0 0 20px cyan;
+}
+.title-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+  background: rgba(0,0,0,0.2);
+  border-radius: 0 0 .8rem .8rem;
+}
+
+.chat-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  row-gap: 0.2rem;
+  align-items: start;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+}
+.chat-avatar {
+  font-size: 1.2rem;
+  line-height: 1.2rem;
+  filter: drop-shadow(0 0 4px #ff00d9)
+          drop-shadow(0 0 10px cyan);
+  animation: pulseGlow 3s infinite;
+}
+.chat-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+}
+.chat-name {
+  font-weight: 600;
+  text-shadow: 0 0 6px #ff00d9, 0 0 20px cyan;
+}
+.chat-role {
+  font-size: 0.6rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.4rem;
+  background: rgba(255,0,217,0.15);
+  border: 1px solid rgba(255,0,217,0.5);
+  box-shadow: 0 0 8px rgba(255,0,217,0.6);
+  text-shadow: 0 0 6px #ff00d9;
+}
+.chat-text {
+  grid-column: 2 / span 1;
+  line-height: 1.2rem;
+  color: var(--text-main);
+  word-break: break-word;
+}
+.chat-time {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-align: right;
+  grid-column: 2 / span 1;
+}
+
+.chat-input-area {
+  padding: 0.8rem 1rem;
+  border-top: 1px solid rgba(255,0,217,0.3);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+.chat-input-area input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  outline: none;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+.chat-input-area button {
+  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
+  border: 1px solid #ff00d9;
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
+}
+
+.side-col {
+  display: grid;
+  grid-template-rows: minmax(180px, auto) minmax(200px, 1fr);
+  gap: 1rem;
+  min-height: 0;
+}
+.box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.8rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.25),
+    0 30px 120px rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.box-head {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255,0,217,0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  text-shadow: 0 0 8px #ff00d9, 0 0 20px cyan;
+}
+.online-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+}
+.online-user {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+}
+.online-avatar {
+  font-size: 1.2rem;
+  line-height: 1.2rem;
+  filter: drop-shadow(0 0 4px #ff00d9)
+          drop-shadow(0 0 10px cyan);
+}
+.online-name {
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 6px #ff00d9, 0 0 20px cyan;
+}
+.online-role {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  line-height: 1rem;
+}
+.dm-btn {
+  font-size: 0.6rem;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(0,255,255,0.4);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.8);
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+
+.profile-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+  font-size: 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+}
+.profile-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.profile-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 0.6rem;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,0,217,0.4);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  animation: pulseGlow 4s infinite;
+  text-shadow:
+    0 0 8px #ff00d9,
+    0 0 20px cyan;
+  box-shadow:
+    0 0 12px rgba(255,0,217,0.4),
+    0 0 40px rgba(0,255,255,0.2);
+}
+.profile-nameblock {
+  line-height: 1rem;
+}
+.profile-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-shadow:
+    0 0 6px #ff00d9,
+    0 0 20px cyan;
+}
+.profile-role {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+.profile-row label {
+  display: block;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+.profile-row .value {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+  font-size: 0.7rem;
+  color: #fff;
+  line-height: 1rem;
+  word-break: break-word;
+}
+.edit-profile-btn {
+  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
+  border: 1px solid #ff00d9;
+  border-radius: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
+}
+
+#authPanel {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.95) 70%);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+.auth-card {
+  width: 320px;
+  max-width: 90%;
+  background: var(--panel-bg-hard);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.5),
+    0 0 60px rgba(0,255,255,0.3),
+    0 80px 160px rgba(0,0,0,0.9);
+  padding: 1rem 1.2rem 1.2rem;
+  display: grid;
+  gap: 0.8rem;
+  text-align: center;
+  position: relative;
+}
+.auth-title {
+  font-size: 1rem;
+  font-weight: 600;
+  text-shadow:
+    0 0 8px #ff00d9,
+    0 0 20px cyan;
+}
+.auth-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1rem;
+  text-align: center;
+}
+.auth-row {
+  text-align: left;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+}
+.auth-row label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.auth-row input,
+.auth-row select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  outline: none;
+  width: 100%;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+.auth-btn {
+  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
+  border: 1px solid #ff00d9;
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  text-align: center;
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
+}
+.small-note {
+  font-size: 0.6rem;
+  line-height: 0.9rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+#errorBox {
+  color: #ff7b7b;
+  text-shadow: 0 0 6px #ff0000;
+  font-size: 0.7rem;
+  min-height: 1rem;
+  text-align: center;
+}
+
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    overflow-y: auto;
   }
+  .side-col {
+    grid-template-rows: auto auto;
+  }
+}
+</style>
+</head>
+<body>
 
-  const user = {
-    id: Date.now().toString(),
-    name,
-    email,
-    password,
-    language: language || "de",
-    avatar: avatar || "🙂",
-    neonColor: neonColor || "#ff00d9",
-    coins: 100,
-    level: 1,
-    role: "user",
-    profileNote: "",
-  };
+<div class="sparkle s1"></div>
+<div class="sparkle s2"></div>
+<div class="sparkle s3"></div>
+<div class="sparkle s4"></div>
+<div class="sparkle s5"></div>
 
-  users.push(user);
-  return res.json({ user });
-});
+<header>
+  <div class="app-left">
+    <div class="logo-circle">🦋</div>
+    <div class="app-title-block">
+      <div class="app-name">ButterflyMusic Freunde App</div>
+      <div class="app-sub">Lobby / Community-Zentrale</div>
+    </div>
+  </div>
 
-// ======================================================
-// 2️⃣ Login
-// ======================================================
-app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
-  const u = users.find((usr) => usr.email === email && usr.password === password);
-  if (!u) return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
-  return res.json({ user: u });
-});
+  <div class="app-right">
+    <div class="user-info">
+      <div class="name" id="uiUserName">– nicht eingeloggt –</div>
+      <div class="role" id="uiUserRole">-</div>
+    </div>
 
-// ======================================================
-// 3️⃣ Nachrichten abrufen
-// ======================================================
-app.get("/api/lobby/messages", (req, res) => {
-  res.json({ messages });
-});
+    <div class="lang-select-wrap">
+      <label for="lobbyLang">Sprache</label>
+      <select id="lobbyLang">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+        <option value="hu">Magyar</option>
+        <option value="pl">Polski</option>
+        <option value="zh">中文</option>
+        <option value="es">Español</option>
+        <option value="it">Italiano</option>
+        <option value="tr">Türkçe</option>
+        <option value="ru">Русский</option>
+      </select>
+    </div>
+  </div>
+</header>
 
-// ======================================================
-// 4️⃣ Nachricht senden
-// ======================================================
-app.post("/api/lobby/messages", (req, res) => {
-  const { userId, text } = req.body;
-  const user = users.find((u) => u.id === userId);
-  if (!user) return res.status(400).json({ error: "Benutzer nicht gefunden." });
+<main>
+  <section class="panel" id="chatPanel">
+    <div class="panel-header">
+      <div class="title">
+        <div class="title-main" id="lobbyTitle">Lobby-Chat</div>
+        <div class="title-sub" id="lobbySub">Alle können hier schreiben 🦋</div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text-dim);">
+        <span id="onlineCount">0</span> online
+      </div>
+    </div>
 
-  const msg = {
-    fromUserId: user.id,
-    avatar: user.avatar,
-    displayName: user.name,
-    neonColor: user.neonColor,
-    role: user.role,
-    text,
-    translatedText: text,
-    time: new Date().toISOString(),
-  };
+    <div class="chat-messages" id="chatMessages">
+    </div>
 
-  messages.push(msg);
-  res.json({ success: true });
-});
+    <div class="chat-input-area">
+      <input id="chatInput" type="text" placeholder="Nachricht schreiben..." />
+      <button id="sendBtn">Senden</button>
+    </div>
+  </section>
 
-// ======================================================
-// 5️⃣ Online-Liste
-// ======================================================
-app.get("/api/online", (req, res) => {
-  res.json({ users });
-});
+  <section class="side-col">
+    <div class="box">
+      <div class="box-head">
+        <span id="onlineTitle">Online jetzt</span>
+        <span style="font-size:0.7rem;color:var(--text-dim);" id="startPrivateLabel">Privatchat starten</span>
+      </div>
+      <div class="online-scroll" id="onlineUsers">
+      </div>
+    </div>
 
-// ======================================================
-// 6️⃣ Profil anzeigen
-// ======================================================
-app.get("/api/profile/:id", (req, res) => {
-  const u = users.find((usr) => usr.id === req.params.id);
-  if (!u) return res.status(404).json({ error: "Benutzer nicht gefunden." });
-  res.json(u);
-});
+    <div class="box">
+      <div class="box-head">
+        <span id="profileTitle">Dein Profil</span>
+        <span style="font-size:0.6rem;color:var(--text-dim);" id="profilePrivateLabel">Privat</span>
+      </div>
+      <div class="profile-body" id="profileArea">
+        <div class="profile-topline">
+          <div class="profile-avatar" id="profileAvatar">🦋</div>
+          <div class="profile-nameblock">
+            <div class="profile-name" id="profileName" style="color:#ff00d9;">
+              – nicht eingeloggt –
+            </div>
+            <div class="profile-role" id="profileRole">-</div>
+          </div>
+        </div>
 
-// ======================================================
-// 7️⃣ Musik-Upload (noch gesperrt)
-// ======================================================
-app.post("/api/music/upload", (req, res) => {
-  return res.status(403).json({
-    error: "Musik-Upload ist geschützt / Filter aktiv / kommt später.",
+        <div class="profile-row">
+          <label id="labelProfileLang">Sprache</label>
+          <div class="value" id="profileLangValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileCoins">Coins</label>
+          <div class="value" id="profileCoinsValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileLevel">Level</label>
+          <div class="value" id="profileLevelValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileNote">Status / Info über dich</label>
+          <div class="value" id="profileNoteValue">
+            (Bitte einloggen)
+          </div>
+        </div>
+
+        <div class="edit-profile-btn" id="editProfileBtn">
+          Profil bearbeiten
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<div id="authPanel">
+  <div class="auth-card">
+    <div class="auth-title">Willkommen 🦋</div>
+    <div class="auth-sub">
+      ButterflyMusic Freunde App<br/>
+      Bitte einloggen oder registrieren.
+    </div>
+
+    <div class="auth-row">
+      <label for="inputMode">Modus</label>
+      <select id="inputMode">
+        <option value="login">Einloggen</option>
+        <option value="register">Registrieren</option>
+      </select>
+    </div>
+
+    <div class="auth-row">
+      <label for="inputName">Dein Name (min. 6 Zeichen)</label>
+      <input id="inputName" placeholder="z.B. NeonRider99" />
+    </div>
+
+    <div class="auth-row">
+      <label for="inputEmail">E-Mail</label>
+      <input id="inputEmail" type="email" placeholder="deinname@example.com" />
+    </div>
+
+    <div class="auth-row">
+      <label for="inputPass">Passwort</label>
+      <input id="inputPass" type="password" placeholder="Passwort" />
+    </div>
+
+    <div class="auth-row">
+      <label for="inputLang">Sprache</label>
+      <select id="inputLang">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="hu">Magyar</option>
+        <option value="fr">Français</option>
+        <option value="pl">Polski</option>
+        <option value="zh">中文</option>
+        <option value="es">Español</option>
+        <option value="it">Italiano</option>
+        <option value="tr">Türkçe</option>
+        <option value="ru">Русский</option>
+      </select>
+    </div>
+
+    <div class="auth-row">
+      <label for="inputAvatar">Avatar (Emoji)</label>
+      <input id="inputAvatar" placeholder="🦋 😎 👾 🔥 🙂" />
+    </div>
+
+    <div class="auth-row">
+      <label for="inputColor">Name-Farbe (Neon)</label>
+      <input id="inputColor" placeholder="#ff00d9" value="#ff00d9" />
+    </div>
+
+    <div id="errorBox"></div>
+
+    <div class="auth-btn" id="authSubmitBtn">Los geht's</div>
+
+    <div class="small-note">
+      Geschützte Namen:<br/>
+      DeepButterflyMusic, Dethoxia,<br/>
+      DarkInfernal, Dethox<br/>
+      sind reserviert.<br/>
+      Beleidigende / sexuelle Namen sind verboten.
+    </div>
+  </div>
+</div>
+
+<script>
+// 1) Deine Server-URL
+const API_BASE = "https://butterflymusic-freunde-app-backend.onrender.com";
+
+// 2) Check: lebt der Server?
+fetch(API_BASE + "/api/online")
+  .then(r => r.json())
+  .then(d => {
+    console.log("Server antwortet:", d);
+  })
+  .catch(err => {
+    console.error("Kann Backend nicht erreichen:", err);
+    alert("Backend nicht erreichbar. Bitte Internet/URL prüfen.");
   });
-});
 
-// ======================================================
-// 8️⃣ Server starten (Render-kompatibel)
-// ======================================================
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT}`);
-});
+// Wir bauen jetzt NOCH NICHT Login/Chat Logik ein.
+// Erstmal nur Oberfläche sichtbar machen.
+// Wenn du JETZT weiß siehst, dann liegt das Problem NICHT am JavaScript,
+// sondern der Browser zeigt die Datei nicht. Dann sagst du mir das.
+
+</script>
+</body>
+</html>
 
 
