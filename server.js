@@ -419,5 +419,5 @@ app.post("/api/music/upload", (req, res) => {
 const PORT = process.env.PORT || 3000;
 
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT});
+  console.log(`✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT}`);
 });
