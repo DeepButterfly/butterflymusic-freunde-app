@@ -1,13 +1,9 @@
 const express = require("express");
 const cors = require("cors");
 
-const app = express();
-app.use(cors());
-app.use(express.json());
-
-// ==============================
-// ROLES & USER STORAGE
-// ==============================
+// -------------------------------------------------
+// BASIS-DATEN
+// -------------------------------------------------
 
 const ROLES = {
   OWNER: "owner",
@@ -16,7 +12,6 @@ const ROLES = {
   USER: "user",
 };
 
-// Namen, die NIEMAND benutzen darf
 const RESERVED_NAMES = [
   "deepbutterflymusic",
   "dethoxia",
@@ -24,14 +19,13 @@ const RESERVED_NAMES = [
   "dethox",
 ];
 
-// Wörter, die NICHT erlaubt sind im Namen
 const BANNED_WORDS = [
   "pimmel","schlampe","fotze","hurensohn","nutte","arsch",
   "sex","fick","ficken","dick","cock","pussy","penis",
   "titte","titten","boobs"
 ];
 
-// kleines Hilfsding: Sonderzeichen 0->o usw. rausfiltern
+// Hilfsfunktion: "P1mmel" → "pimmel"
 function normalizeName(str) {
   return (str || "")
     .toLowerCase()
@@ -46,14 +40,14 @@ function normalizeName(str) {
     .trim();
 }
 
-// unsere "Datenbank" im Speicher
+// In-Memory Userliste
 const users = [
   {
     id: "1",
     name: "DeepButterflyMusic",
     normalizedName: "deepbutterflymusic",
     email: "owner@example.com",
-    password: "supergeheim", // Klartext jetzt, später Hash
+    password: "supergeheim", // Plaintext für jetzt
     avatar: "🦋",
     neonColor: "#ff00d9",
     language: "de",
@@ -68,8 +62,8 @@ const users = [
     id: "2",
     name: "Dethoxia",
     normalizedName: "dethoxia",
-    email: "alt-owner@example.com",
-    password: "supergeheim2",
+    email: "dethoxia@example.com",
+    password: "dethoxia123",
     avatar: "😎",
     neonColor: "#00ffff",
     language: "en",
@@ -111,13 +105,13 @@ const users = [
     xp: 50,
     canBeBlocked: false,
     profileNote: "Zweit-Account von DarkInfernal",
-  },
+  }
 ];
 
-// wer gerade online ist (IDs)
+// wer ist online
 const onlineUsers = new Set(["1","2","3","4"]);
 
-// XP/Level Regeln
+// XP / Level config
 const LEVEL_CFG = {
   MAX_LEVEL: 500,
   XP_PER_LEVEL: 100,
@@ -132,21 +126,13 @@ const lobbyMessages = [
     neonColor: "#ff00d9",
     role: "owner",
     text: "Willkommen in der ButterflyMusic Freunde App 💜 Bitte bleibt respektvoll.",
-    time: Date.now(),
+    timestamp: Date.now(),
   }
 ];
 
-// Hilfsfunktionen
-function giveXP(user, xp) {
-  user.xp = (user.xp || 0) + xp;
-  while (user.xp >= LEVEL_CFG.XP_PER_LEVEL) {
-    user.xp -= LEVEL_CFG.XP_PER_LEVEL;
-    user.level = (user.level || 1) + 1;
-    if (user.level > LEVEL_CFG.MAX_LEVEL) {
-      user.level = 1; // Prestige Reset geplant
-    }
-  }
-}
+// -------------------------------------------------
+// HILFSFUNKTIONEN
+// -------------------------------------------------
 
 function findUserByEmail(email) {
   return users.find(
@@ -154,9 +140,35 @@ function findUserByEmail(email) {
   );
 }
 
-// ==============================
-// API: REGISTER
-// ==============================
+function giveXP(user, amount) {
+  user.xp = (user.xp || 0) + amount;
+  while (user.xp >= LEVEL_CFG.XP_PER_LEVEL) {
+    user.xp -= LEVEL_CFG.XP_PER_LEVEL;
+    user.level = (user.level || 1) + 1;
+    if (user.level > LEVEL_CFG.MAX_LEVEL) {
+      // Prestige Reset nach 500
+      user.level = 1;
+      // später: dauerhaftes Badge speichern
+    }
+  }
+}
+
+function translateMessage(text, lang) {
+  // Platzhalter: echte Übersetzung kommt später
+  return `[${lang}] ${text}`;
+}
+
+// -------------------------------------------------
+// EXPRESS SETUP
+// -------------------------------------------------
+
+const app = express();
+app.use(cors());
+app.use(express.json());
+
+// -------------------------------------------------
+// API: REGISTRIEREN
+// -------------------------------------------------
 
 app.post("/api/register", (req, res) => {
   const { name, email, password, language, avatar, neonColor } = req.body;
@@ -168,8 +180,8 @@ app.post("/api/register", (req, res) => {
     return res.status(400).json({ error: "Name zu kurz." });
   }
 
-  const lower = (name || "").toLowerCase();
-  if (BANNED_WORDS.some(w => lower.includes(w))) {
+  const loweredName = (name || "").toLowerCase();
+  if (BANNED_WORDS.some(w => loweredName.includes(w))) {
     return res.status(400).json({ error: "Dieser Name ist nicht erlaubt." });
   }
 
@@ -191,7 +203,7 @@ app.post("/api/register", (req, res) => {
     name,
     normalizedName: norm,
     email,
-    password, // später ersetzen wir das durch Hash
+    password, // später ersetzen durch Hash
     avatar: avatar || "🙂",
     neonColor: neonColor || "#ff00d9",
     language: language || "de",
@@ -221,16 +233,18 @@ app.post("/api/register", (req, res) => {
   });
 });
 
-// ==============================
+// -------------------------------------------------
 // API: LOGIN
-// ==============================
+// -------------------------------------------------
+
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
 
   const u = findUserByEmail(email || "");
-  if (!u) return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
+  if (!u) {
+    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
+  }
 
-  // aktuell Plaintext-Vergleich (später bcrypt)
   if (u.password !== password) {
     return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
   }
@@ -248,34 +262,38 @@ app.post("/api/login", (req, res) => {
       avatar: u.avatar,
       neonColor: u.neonColor,
       language: u.language,
+      profileNote: u.profileNote || "",
     }
   });
 });
 
-// ==============================
-// API: Lobby Nachrichten lesen
-// ==============================
+// -------------------------------------------------
+// API: Lobby Nachrichten holen
+// -------------------------------------------------
+
 app.get("/api/lobby/messages", (req, res) => {
   const lang = req.query.lang || "de";
 
-  const translated = lobbyMessages.map(m => {
-    return {
-      ...m,
-      translatedText: `[${lang}] ${m.text}`,
-      isoTime: new Date(m.time).toISOString(),
-    };
-  });
+  const out = lobbyMessages.map(m => ({
+    avatar: m.avatar,
+    displayName: m.displayName,
+    neonColor: m.neonColor,
+    role: m.role,
+    translatedText: translateMessage(m.text, lang),
+    time: new Date(m.timestamp).toISOString()
+  }));
 
-  res.json({ messages: translated });
+  res.json({ messages: out });
 });
 
-// ==============================
-// API: Lobby Nachricht senden
-// ==============================
+// -------------------------------------------------
+// API: Neue Nachricht schicken
+// -------------------------------------------------
+
 app.post("/api/lobby/messages", (req, res) => {
   const { userId, text } = req.body;
   if (!text || !text.trim()) {
-    return res.status(400).json({ error: "Kein Text" });
+    return res.status(400).json({ error: "Kein Text." });
   }
 
   const u = users.find(x => x.id === userId);
@@ -283,27 +301,27 @@ app.post("/api/lobby/messages", (req, res) => {
     return res.status(401).json({ error: "User nicht gefunden / nicht eingeloggt." });
   }
 
-  // XP/Coins für Aktivität
   giveXP(u, 5);
   u.coins += 1;
 
-  const msg = {
+  const newMsg = {
     fromUserId: u.id,
     avatar: u.avatar,
     displayName: u.name,
     neonColor: u.neonColor,
     role: u.role,
     text: text.trim(),
-    time: Date.now(),
+    timestamp: Date.now(),
   };
-  lobbyMessages.push(msg);
 
+  lobbyMessages.push(newMsg);
   res.json({ ok: true });
 });
 
-// ==============================
-// API: Wer ist online?
-// ==============================
+// -------------------------------------------------
+// API: Online Liste
+// -------------------------------------------------
+
 app.get("/api/online", (req, res) => {
   const list = users
     .filter(u => onlineUsers.has(u.id))
@@ -312,18 +330,18 @@ app.get("/api/online", (req, res) => {
       name: u.name,
       avatar: u.avatar,
       neonColor: u.neonColor,
-      role: u.role,
+      role: u.role
     }));
-
   res.json({ users: list });
 });
 
-// ==============================
-// API: Profil
-// ==============================
-app.get("/api/profile/:id", (req,res) => {
-  const id = req.params.id;
-  const u = users.find(x => x.id === id);
+// -------------------------------------------------
+// API: Profil laden
+// -------------------------------------------------
+
+app.get("/api/profile/:uid", (req, res) => {
+  const uid = req.params.uid;
+  const u = users.find(x => x.id === uid);
   if (!u) return res.status(404).json({ error: "User nicht gefunden." });
 
   res.json({
@@ -336,21 +354,14 @@ app.get("/api/profile/:id", (req,res) => {
     coins: u.coins,
     level: u.level,
     xp: u.xp,
-    profileNote: u.profileNote,
+    profileNote: u.profileNote || "",
   });
 });
 
-// ==============================
-// FRONTEND HTML
-// ==============================
-//
-// Das ist eine abgespeckte Version von deiner echten Neon-Seite:
-// - Login/Registrieren Panel
-// - Lobby-Chat
-// - Profil rechts
-//
-// Wichtig: Jetzt ist alles in EINER Seite. Kein Weiß.
-//
+// -------------------------------------------------
+// FRONTEND AUSLIEFERN
+// Das ist deine Neon-Lobby + Login-Overlay
+// -------------------------------------------------
 
 app.get("/", (req, res) => {
   const html = `
@@ -361,358 +372,1007 @@ app.get("/", (req, res) => {
 <meta name="viewport" content="width=device-width,initial-scale=1.0" />
 <title>ButterflyMusic Freunde App</title>
 <style>
-body {
-  margin:0;
-  min-height:100vh;
-  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,0.22) 0%, transparent 60%),
-              radial-gradient(circle at 80% 30%, rgba(0,255,255,0.18) 0%, transparent 60%),
-              radial-gradient(circle at 50% 80%, rgba(140,0,255,0.22) 0%, transparent 60%),
-              radial-gradient(circle at 50% 50%, rgba(0,0,0,1) 0%, rgba(0,0,0,0.5) 60%);
-  background-color:#050108;
-  color:#fff;
+@keyframes pulseGlow {
+  0%   { box-shadow: 0 0 8px rgba(255,0,217,0.6), 0 0 30px rgba(0,255,255,0.2); }
+  50%  { box-shadow: 0 0 16px rgba(255,0,217,1),   0 0 50px rgba(0,255,255,0.5); }
+  100% { box-shadow: 0 0 8px rgba(255,0,217,0.6), 0 0 30px rgba(0,255,255,0.2); }
+}
+@keyframes sparkle {
+  0%   { opacity: 0; transform: translateY(0) scale(1); }
+  50%  { opacity: 1; transform: translateY(-10px) scale(1.2); }
+  100% { opacity: 0; transform: translateY(-20px) scale(0.8); }
+}
+:root {
+  --bg-dark: #050108;
+  --neon-pink: #ff00d9;
+  --neon-cyan: #00ffff;
+  --neon-purple: #8a00ff;
+  --panel-bg: rgba(20, 8, 30, 0.55);
+  --panel-border: rgba(255, 0, 217, 0.4);
+  --text-main: #fff;
+  --text-dim: #8a8a8a;
+  --input-bg: rgba(0,0,0,0.4);
+  --input-border: rgba(0,255,255,0.4);
+  --panel-bg-hard: rgba(0,0,0,0.6);
+}
+* {
+  box-sizing: border-box;
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Inter", Roboto, "Segoe UI", sans-serif;
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  padding:1rem;
-  text-shadow:0 0 10px #ff00d9,0 0 20px #00ffff;
+  color: var(--text-main);
 }
-
-/* login panel */
-#authPanel {
-  background: rgba(0,0,0,0.7);
-  border:1px solid rgba(255,0,217,0.4);
-  box-shadow:0 0 20px rgba(255,0,217,0.5),0 0 60px rgba(0,255,255,0.3);
-  border-radius:1rem;
-  padding:1rem;
-  width:320px;
-  max-width:90%;
-  color:#fff;
-  margin-bottom:1rem;
+body {
+  margin: 0;
+  background-color: var(--bg-dark);
+  background-image:
+    radial-gradient(circle at 20% 20%, rgba(255,0,217,0.22) 0%, transparent 60%),
+    radial-gradient(circle at 80% 30%, rgba(0,255,255,0.18) 0%, transparent 60%),
+    radial-gradient(circle at 50% 80%, rgba(140,0,255,0.22) 0%, transparent 60%),
+    repeating-radial-gradient(circle at 40% 60%, rgba(255,255,255,0.15) 0 1px, transparent 1px 3px);
+  background-blend-mode: screen;
+  min-height: 100vh;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
 }
-h1.appTitle{
-  margin:0 0 .5rem 0;
-  text-align:center;
-  font-size:1.1rem;
-  color:#ff00d9;
-  text-shadow:0 0 8px #ff00d9,0 0 20px #00ffff,0 0 40px #8a00ff;
+/* Glitzer Punkte */
+.sparkle {
+  position: absolute;
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+  background: radial-gradient(circle, #fff 0%, rgba(255,0,217,0.7) 40%, transparent 70%);
+  box-shadow:
+    0 0 6px rgba(255,255,255,0.9),
+    0 0 20px rgba(255,0,217,0.8),
+    0 0 40px rgba(0,255,255,0.5);
+  animation: sparkle 3s linear infinite;
 }
-.labelSmall{
-  font-size:0.7rem;
-  color:#aaa;
-  margin-top:.5rem;
-  margin-bottom:.2rem;
+.s1 { left: 10%; top: 20%; animation-delay: 0s; }
+.s2 { left: 80%; top: 30%; animation-delay: 1s; }
+.s3 { left: 60%; top: 80%; animation-delay: 2s; }
+.s4 { left: 30%; top: 65%; animation-delay: 1.5s; }
+.s5 { left: 50%; top: 10%; animation-delay: 0.5s; }
+/* HEADER */
+header {
+  background: rgba(0,0,0,0.5);
+  border-bottom: 1px solid rgba(255,0,217,0.4);
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.2),
+    0 20px 80px rgba(0,0,0,0.9);
+  padding: 0.8rem 1rem;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  z-index: 5;
 }
-input,select,button{
-  width:100%;
-  background:rgba(0,0,0,0.5);
-  border:1px solid #00ffff;
-  color:#fff;
-  border-radius:0.5rem;
-  padding:0.5rem;
-  font-size:0.8rem;
-  box-shadow:0 0 10px rgba(0,255,255,0.4),0 0 30px rgba(255,0,217,0.2);
+.app-left {
+  display: flex;
+  align-items: center;
+  gap: 0.8rem;
 }
-button{
+.logo-circle {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  background:
+    radial-gradient(circle at 30% 30%, #fff 0%, #ffd5fb 15%, #ff00d9 40%, rgba(0,0,0,0) 70%);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.9),
+    0 0 30px rgba(0,255,255,0.5),
+    0 20px 60px rgba(0,0,0,0.9);
+  display: grid;
+  place-items: center;
+  font-size: 1rem;
+  font-weight: 600;
+  color: #050108;
+  text-shadow: 0 0 4px rgba(255,255,255,0.8);
+  animation: pulseGlow 4s infinite;
+}
+.app-title-block {
+  line-height: 1.2rem;
+}
+.app-name {
+  font-size: 0.9rem;
+  font-weight: 600;
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 20px var(--neon-cyan),
+    0 0 40px var(--neon-purple);
+}
+.app-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.app-right {
+  display: flex;
+  align-items: flex-end;
+  gap: 1rem;
+  flex-wrap: wrap;
+}
+.user-info {
+  font-size: 0.7rem;
+  line-height: 1rem;
+  text-align: right;
+  min-width: 120px;
+}
+.user-info .name {
+  font-weight: 600;
+  color: var(--neon-pink);
+  text-shadow:
+    0 0 6px var(--neon-pink),
+    0 0 20px var(--neon-cyan);
+}
+.lang-select-wrap label {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+  text-align: right;
+  display: block;
+}
+.lang-select-wrap select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.4rem 0.6rem;
+  font-size: 0.75rem;
+  color: var(--text-main);
+  outline: none;
+  min-width: 100px;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+/* Layout */
+main {
+  flex: 1;
+  min-height: 0;
+  display: grid;
+  grid-template-columns: 1fr 260px;
+  gap: 1rem;
+  padding: 1rem;
+  position: relative;
+  z-index: 4;
+}
+/* Panels */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.8rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.25),
+    0 30px 120px rgba(0,0,0,0.9);
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+/* Panel Header */
+.panel-header {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255,0,217,0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.panel-header .title {
+  display: flex;
+  flex-direction: column;
+  line-height: 1rem;
+}
+.title-main {
+  color: var(--text-main);
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 20px var(--neon-cyan);
+}
+.title-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  font-weight: 400;
+}
+/* Chatliste */
+.chat-messages {
+  flex: 1;
+  overflow-y: auto;
+  padding: 1rem;
+  display: grid;
+  gap: 0.75rem;
+  font-size: 0.8rem;
+}
+.chat-line {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  column-gap: 0.6rem;
+  row-gap: 0.2rem;
+  align-items: start;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.6rem;
+  padding: 0.6rem 0.7rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+}
+.chat-avatar {
+  font-size: 1.2rem;
+  line-height: 1.2rem;
+  filter: drop-shadow(0 0 4px var(--neon-pink))
+          drop-shadow(0 0 10px var(--neon-cyan));
+  animation: pulseGlow 3s infinite;
+}
+.chat-meta {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  display: flex;
+  justify-content: space-between;
+}
+.chat-name {
+  font-weight: 600;
+  text-shadow: 0 0 6px var(--neon-pink), 0 0 20px var(--neon-cyan);
+}
+.chat-role {
+  font-size: 0.6rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 0.4rem;
+  background: rgba(255,0,217,0.15);
+  border: 1px solid rgba(255,0,217,0.5);
+  box-shadow: 0 0 8px rgba(255,0,217,0.6);
+  text-shadow: 0 0 6px var(--neon-pink);
+}
+.chat-text {
+  grid-column: 2 / span 1;
+  line-height: 1.2rem;
+  color: var(--text-main);
+  word-break: break-word;
+}
+.chat-time {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  text-align: right;
+  grid-column: 2 / span 1;
+}
+/* Chat Input */
+.chat-input-area {
+  padding: 0.8rem 1rem;
+  border-top: 1px solid rgba(255,0,217,0.3);
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 0.5rem;
+}
+.chat-input-area input {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.6rem 0.7rem;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  outline: none;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+.chat-input-area button {
   background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
-  border:1px solid #ff00d9;
-  cursor:pointer;
-  margin-top:.5rem;
+  border: 1px solid var(--neon-pink);
+  border-radius: 0.5rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
+}
+/* Rechte Spalte */
+.side-col {
+  display: grid;
+  grid-template-rows: minmax(180px, auto) minmax(200px, 1fr);
+  gap: 1rem;
+  min-height: 0;
+}
+.box {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  border-radius: 0.8rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.4),
+    0 0 60px rgba(0,255,255,0.25),
+    0 30px 120px rgba(0,0,0,0.9);
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+.box-head {
+  padding: 0.8rem 1rem;
+  border-bottom: 1px solid rgba(255,0,217,0.3);
+  font-size: 0.8rem;
+  font-weight: 600;
+  display: flex;
+  justify-content: space-between;
+  text-shadow: 0 0 8px var(--neon-pink), 0 0 20px var(--neon-cyan);
+}
+.online-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+  display: grid;
+  gap: 0.6rem;
+  font-size: 0.75rem;
+}
+.online-user {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  align-items: center;
+  gap: 0.5rem;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.6rem;
+  padding: 0.5rem 0.6rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+}
+.online-avatar {
+  font-size: 1.2rem;
+  line-height: 1.2rem;
+  filter: drop-shadow(0 0 4px var(--neon-pink))
+          drop-shadow(0 0 10px var(--neon-cyan));
+}
+.online-name {
+  font-weight: 600;
+  font-size: 0.75rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 0 6px var(--neon-pink), 0 0 20px var(--neon-cyan);
+}
+.online-role {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  line-height: 1rem;
+}
+.dm-btn {
+  font-size: 0.6rem;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(0,255,255,0.4);
+  border-radius: 0.4rem;
+  padding: 0.4rem 0.5rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.8);
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+/* Profilkarte */
+.profile-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 0.8rem 1rem;
+  font-size: 0.75rem;
+  display: grid;
+  gap: 0.7rem;
+}
+.profile-topline {
+  display: flex;
+  align-items: center;
+  gap: 0.7rem;
+}
+.profile-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 0.6rem;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,0,217,0.4);
+  display: grid;
+  place-items: center;
+  font-size: 1.2rem;
+  animation: pulseGlow 4s infinite;
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 20px var(--neon-cyan);
+  box-shadow:
+    0 0 12px rgba(255,0,217,0.4),
+    0 0 40px rgba(0,255,255,0.2);
+}
+.profile-nameblock {
+  line-height: 1rem;
+}
+.profile-name {
+  font-weight: 600;
+  font-size: 0.8rem;
+  text-shadow:
+    0 0 6px var(--neon-pink),
+    0 0 20px var(--neon-cyan);
+}
+.profile-role {
+  font-size: 0.6rem;
+  color: var(--text-dim);
+}
+.profile-row label {
+  display: block;
+  font-size: 0.6rem;
+  color: var(--text-dim);
+  margin-bottom: 0.2rem;
+}
+.profile-row .value {
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(0,255,255,0.3);
+  border-radius: 0.5rem;
+  padding: 0.5rem 0.6rem;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.3),
+    0 0 24px rgba(255,0,217,0.2);
+  font-size: 0.7rem;
+  color: #fff;
+  line-height: 1rem;
+  word-break: break-word;
+}
+.edit-profile-btn {
+  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
+  border: 1px solid var(--neon-pink);
+  border-radius: 0.5rem;
+  font-size: 0.7rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-align: center;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
 }
 
-/* lobby / profil bereich */
-#mainArea {
-  width:100%;
-  max-width:900px;
-  display:none; /* erst sichtbar nach login */
-  gap:1rem;
-  flex-wrap:wrap;
-  justify-content:center;
+/* LOGIN OVERLAY */
+#authPanel {
+  position: absolute;
+  inset: 0;
+  background: radial-gradient(circle at 50% 30%, rgba(0,0,0,0.8) 0%, rgba(0,0,0,0.95) 70%);
+  display: grid;
+  place-items: center;
+  z-index: 9999;
+}
+.auth-card {
+  width: 320px;
+  max-width: 90%;
+  background: var(--panel-bg-hard);
+  border: 1px solid var(--panel-border);
+  border-radius: 1rem;
+  box-shadow:
+    0 0 20px rgba(255,0,217,0.5),
+    0 0 60px rgba(0,255,255,0.3),
+    0 80px 160px rgba(0,0,0,0.9);
+  padding: 1rem 1.2rem 1.2rem;
+  display: grid;
+  gap: 0.8rem;
+  text-align: center;
+  position: relative;
+}
+.auth-title {
+  font-size: 1rem;
+  font-weight: 600;
+  text-shadow:
+    0 0 8px var(--neon-pink),
+    0 0 20px var(--neon-cyan);
+}
+.auth-sub {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+  line-height: 1rem;
+}
+.auth-row {
+  text-align: left;
+  display: grid;
+  gap: 0.3rem;
+  font-size: 0.75rem;
+}
+.auth-row label {
+  font-size: 0.7rem;
+  color: var(--text-dim);
+}
+.auth-row input,
+.auth-row select {
+  background: var(--input-bg);
+  border: 1px solid var(--input-border);
+  border-radius: 0.5rem;
+  padding: 0.55rem 0.6rem;
+  font-size: 0.8rem;
+  color: var(--text-main);
+  outline: none;
+  width: 100%;
+  box-shadow:
+    0 0 8px rgba(0,255,255,0.4),
+    0 0 24px rgba(255,0,217,0.25);
+}
+.auth-btn {
+  background: radial-gradient(circle at 20% 20%, rgba(255,0,217,1) 0%, rgba(138,0,255,1) 40%, rgba(0,0,0,0) 70%);
+  border: 1px solid var(--neon-pink);
+  border-radius: 0.6rem;
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #fff;
+  padding: 0.6rem 0.8rem;
+  cursor: pointer;
+  text-shadow: 0 0 6px rgba(255,255,255,0.9);
+  text-align: center;
+  box-shadow:
+    0 0 10px rgba(255,0,217,0.8),
+    0 0 40px rgba(255,0,217,0.6),
+    0 30px 80px rgba(0,0,0,0.9);
+}
+.small-note {
+  font-size: 0.6rem;
+  line-height: 0.9rem;
+  color: var(--text-dim);
+  text-align: center;
+}
+#errorBox {
+  color: #ff7b7b;
+  text-shadow: 0 0 6px #ff0000;
+  font-size: 0.7rem;
+  min-height: 1rem;
+  text-align: center;
 }
 
-.panelChat {
-  flex:1 1 500px;
-  max-width:500px;
-  background:rgba(0,0,0,0.5);
-  border:1px solid rgba(0,255,255,0.4);
-  border-radius:0.8rem;
-  box-shadow:0 0 20px rgba(0,255,255,0.4),0 0 60px rgba(255,0,217,0.25);
-  padding:1rem;
-}
-#chatMessages {
-  background:#000;
-  border:1px solid #00ffff;
-  border-radius:0.5rem;
-  min-height:150px;
-  max-height:200px;
-  overflow-y:auto;
-  padding:.5rem;
-  font-size:0.8rem;
-  line-height:1.2rem;
-  box-shadow:0 0 8px rgba(0,255,255,0.6),0 0 30px rgba(255,0,217,0.3);
-}
-.msgLine { margin-bottom:.7rem; word-break:break-word; }
-.nick { font-weight:600; }
-
-.chatSendRow {
-  display:flex;
-  flex-wrap:wrap;
-  gap:.5rem;
-  margin-top:.7rem;
-}
-.chatSendRow input{
-  flex:1 1 auto;
-}
-.chatSendRow button{
-  flex:0 0 auto;
-  width:auto;
-  min-width:70px;
-}
-
-/* profil panel */
-.panelProfile {
-  flex:0 1 300px;
-  max-width:300px;
-  background:rgba(0,0,0,0.5);
-  border:1px solid rgba(255,0,217,0.4);
-  border-radius:0.8rem;
-  box-shadow:0 0 20px rgba(255,0,217,0.4),0 0 60px rgba(0,255,255,0.25);
-  padding:1rem;
-  font-size:0.8rem;
-  line-height:1.2rem;
-}
-.profileRowTitle {
-  font-size:0.7rem;
-  color:#aaa;
-}
-.profileValue {
-  background:rgba(0,0,0,0.4);
-  border:1px solid rgba(0,255,255,0.3);
-  border-radius:0.5rem;
-  padding:.4rem .5rem;
-  margin-bottom:.5rem;
-  box-shadow:0 0 8px rgba(0,255,255,0.3),0 0 24px rgba(255,0,217,0.2);
-  color:#fff;
-  word-break:break-word;
-}
-
-.footerInfo {
-  margin-top:1rem;
-  font-size:0.6rem;
-  color:#aaa;
-  text-align:center;
+/* RESPONSIVE */
+@media (max-width: 800px) {
+  main {
+    grid-template-columns: 1fr;
+    grid-auto-rows: auto;
+    overflow-y: auto;
+  }
+  .side-col {
+    grid-template-rows: auto auto;
+  }
 }
 </style>
 </head>
 <body>
 
+<!-- Glitzer -->
+<div class="sparkle s1"></div>
+<div class="sparkle s2"></div>
+<div class="sparkle s3"></div>
+<div class="sparkle s4"></div>
+<div class="sparkle s5"></div>
+
+<!-- HEADER -->
+<header>
+  <div class="app-left">
+    <div class="logo-circle">🦋</div>
+    <div class="app-title-block">
+      <div class="app-name">ButterflyMusic Freunde App</div>
+      <div class="app-sub">Lobby / Community-Zentrale</div>
+    </div>
+  </div>
+
+  <div class="app-right">
+    <div class="user-info">
+      <div class="name" id="uiUserName">– nicht eingeloggt –</div>
+      <div class="role" id="uiUserRole">-</div>
+    </div>
+
+    <div class="lang-select-wrap">
+      <label for="lobbyLang">Sprache</label>
+      <select id="lobbyLang">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="fr">Français</option>
+        <option value="hu">Magyar</option>
+        <option value="pl">Polski</option>
+        <option value="zh">中文</option>
+        <option value="es">Español</option>
+        <option value="it">Italiano</option>
+        <option value="tr">Türkçe</option>
+        <option value="ru">Русский</option>
+      </select>
+    </div>
+  </div>
+</header>
+
+<!-- MAIN -->
+<main>
+  <!-- LINKER BEREICH: CHAT -->
+  <section class="panel" id="chatPanel">
+    <div class="panel-header">
+      <div class="title">
+        <div class="title-main" id="lobbyTitle">Lobby-Chat</div>
+        <div class="title-sub" id="lobbySub">Alle können hier schreiben 🦋</div>
+      </div>
+      <div style="font-size:0.7rem;color:var(--text-dim);">
+        <span id="onlineCount">0</span> online
+      </div>
+    </div>
+
+    <div class="chat-messages" id="chatMessages">
+      <!-- Nachrichten kommen per JS -->
+    </div>
+
+    <div class="chat-input-area">
+      <input id="chatInput" type="text" placeholder="Nachricht schreiben..." />
+      <button id="sendBtn">Senden</button>
+    </div>
+  </section>
+
+  <!-- RECHTE SPALTE -->
+  <section class="side-col">
+    <!-- Online Liste -->
+    <div class="box">
+      <div class="box-head">
+        <span id="onlineTitle">Online jetzt</span>
+        <span style="font-size:0.7rem;color:var(--text-dim);" id="startPrivateLabel">Privatchat starten</span>
+      </div>
+      <div class="online-scroll" id="onlineUsers">
+        <!-- Online User Liste -->
+      </div>
+    </div>
+
+    <!-- Eigenes Profil -->
+    <div class="box">
+      <div class="box-head">
+        <span id="profileTitle">Dein Profil</span>
+        <span style="font-size:0.6rem;color:var(--text-dim);" id="profilePrivateLabel">Privat</span>
+      </div>
+      <div class="profile-body" id="profileArea">
+        <div class="profile-topline">
+          <div class="profile-avatar" id="profileAvatar">🦋</div>
+          <div class="profile-nameblock">
+            <div class="profile-name" id="profileName" style="color:#ff00d9;">
+              – nicht eingeloggt –
+            </div>
+            <div class="profile-role" id="profileRole">-</div>
+          </div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileLang">Sprache</label>
+          <div class="value" id="profileLangValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileCoins">Coins</label>
+          <div class="value" id="profileCoinsValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileLevel">Level</label>
+          <div class="value" id="profileLevelValue">-</div>
+        </div>
+
+        <div class="profile-row">
+          <label id="labelProfileNote">Status / Info über dich</label>
+          <div class="value" id="profileNoteValue">
+            (Bitte einloggen)
+          </div>
+        </div>
+
+        <div class="edit-profile-btn" id="editProfileBtn">
+          Profil bearbeiten
+        </div>
+      </div>
+    </div>
+  </section>
+</main>
+
+<!-- LOGIN / REGISTER OVERLAY -->
 <div id="authPanel">
-  <h1 class="appTitle">🦋 ButterflyMusic Freunde App</h1>
-  <div class="labelSmall">Modus</div>
-  <select id="authMode">
-    <option value="login">Einloggen</option>
-    <option value="register">Registrieren</option>
-  </select>
-
-  <div class="labelSmall">Name (min. 6 Zeichen)</div>
-  <input id="authName" placeholder="z.B. NeonRider99" />
-
-  <div class="labelSmall">E-Mail</div>
-  <input id="authEmail" placeholder="deinname@example.com" />
-
-  <div class="labelSmall">Passwort</div>
-  <input id="authPass" type="password" placeholder="Passwort" />
-
-  <div class="labelSmall">Sprache</div>
-  <select id="authLang">
-    <option value="de">Deutsch</option>
-    <option value="en">English</option>
-    <option value="fr">Français</option>
-    <option value="hu">Magyar</option>
-    <option value="pl">Polski</option>
-    <option value="zh">中文</option>
-    <option value="es">Español</option>
-    <option value="it">Italiano</option>
-    <option value="tr">Türkçe</option>
-    <option value="ru">Русский</option>
-  </select>
-
-  <div class="labelSmall">Avatar (Emoji)</div>
-  <input id="authAvatar" placeholder="🦋 😎 👾 🔥 🙂" />
-
-  <div class="labelSmall">Farbe für deinen Namen (Neon)</div>
-  <input id="authColor" value="#ff00d9" />
-
-  <div id="authError" style="color:#ff6b6b; font-size:0.7rem; min-height:1rem; text-shadow:0 0 6px #ff0000;"></div>
-
-  <button id="authBtn">Los geht's</button>
-
-  <div style="font-size:0.6rem; color:#888; line-height:1rem; margin-top:.5rem;">
-    Geschützte Namen:<br/>
-    DeepButterflyMusic, Dethoxia,<br/>
-    DarkInfernal, Dethox<br/>
-    sind reserviert.<br/>
-    Beleidigende / sexuelle Namen verboten.
-  </div>
-</div>
-
-<div id="mainArea">
-  <div class="panelChat">
-    <div id="chatMessages"></div>
-    <div class="chatSendRow">
-      <input id="chatInput" placeholder="Schreib etwas..." />
-      <button id="chatSendBtn">Senden</button>
+  <div class="auth-card">
+    <div class="auth-title">Willkommen 🦋</div>
+    <div class="auth-sub">
+      ButterflyMusic Freunde App<br/>
+      Bitte einloggen oder registrieren.
     </div>
-    <div class="footerInfo">
-      Live-Server verbunden mit<br/>
-      butterflymusic-freunde-app-backend.onrender.com
+
+    <div class="auth-row">
+      <label for="inputMode">Modus</label>
+      <select id="inputMode">
+        <option value="login">Einloggen</option>
+        <option value="register">Registrieren</option>
+      </select>
     </div>
-  </div>
 
-  <div class="panelProfile">
-    <div class="profileRowTitle">Name</div>
-    <div class="profileValue" id="pName">-</div>
+    <div class="auth-row">
+      <label for="inputName">Dein Name (min. 6 Zeichen)</label>
+      <input id="inputName" placeholder="z.B. NeonRider99" />
+    </div>
 
-    <div class="profileRowTitle">Rolle</div>
-    <div class="profileValue" id="pRole">-</div>
+    <div class="auth-row">
+      <label for="inputEmail">E-Mail</label>
+      <input id="inputEmail" type="email" placeholder="deinname@example.com" />
+    </div>
 
-    <div class="profileRowTitle">Sprache</div>
-    <div class="profileValue" id="pLang">-</div>
+    <div class="auth-row">
+      <label for="inputPass">Passwort</label>
+      <input id="inputPass" type="password" placeholder="Passwort" />
+    </div>
 
-    <div class="profileRowTitle">Level</div>
-    <div class="profileValue" id="pLevel">-</div>
+    <div class="auth-row">
+      <label for="inputLang">Sprache</label>
+      <select id="inputLang">
+        <option value="de">Deutsch</option>
+        <option value="en">English</option>
+        <option value="hu">Magyar</option>
+        <option value="fr">Français</option>
+        <option value="pl">Polski</option>
+        <option value="zh">中文</option>
+        <option value="es">Español</option>
+        <option value="it">Italiano</option>
+        <option value="tr">Türkçe</option>
+        <option value="ru">Русский</option>
+      </select>
+    </div>
 
-    <div class="profileRowTitle">Coins</div>
-    <div class="profileValue" id="pCoins">-</div>
+    <div class="auth-row">
+      <label for="inputAvatar">Avatar (Emoji)</label>
+      <input id="inputAvatar" placeholder="🦋 😎 👾 🔥 🙂" />
+    </div>
 
-    <div class="profileRowTitle">Status</div>
-    <div class="profileValue" id="pNote">-</div>
+    <div class="auth-row">
+      <label for="inputColor">Name-Farbe (Neon)</label>
+      <input id="inputColor" placeholder="#ff00d9" value="#ff00d9" />
+    </div>
+
+    <div id="errorBox"></div>
+
+    <div class="auth-btn" id="authSubmitBtn">Los geht's</div>
+
+    <div class="small-note">
+      Geschützte Namen:<br/>
+      DeepButterflyMusic, Dethoxia,<br/>
+      DarkInfernal, Dethox<br/>
+      sind reserviert.<br/>
+      Beleidigende / sexuelle Namen sind verboten.
+    </div>
   </div>
 </div>
 
 <script>
-let currentUser = null;
-
-// =======================
-// Login / Register
-// =======================
-const authMode   = document.getElementById("authMode");
-const authName   = document.getElementById("authName");
-const authEmail  = document.getElementById("authEmail");
-const authPass   = document.getElementById("authPass");
-const authLang   = document.getElementById("authLang");
-const authAvatar = document.getElementById("authAvatar");
-const authColor  = document.getElementById("authColor");
-const authError  = document.getElementById("authError");
-const authBtn    = document.getElementById("authBtn");
-
-const authPanel  = document.getElementById("authPanel");
-const mainArea   = document.getElementById("mainArea");
-
-// Profil-Anzeige
-const pName  = document.getElementById("pName");
-const pRole  = document.getElementById("pRole");
-const pLang  = document.getElementById("pLang");
-const pLevel = document.getElementById("pLevel");
-const pCoins = document.getElementById("pCoins");
-const pNote  = document.getElementById("pNote");
-
-// Chat
-const chatMessagesDiv = document.getElementById("chatMessages");
-const chatInput       = document.getElementById("chatInput");
-const chatSendBtn     = document.getElementById("chatSendBtn");
-
-// API Base ist leer, weil Frontend & Backend gleiche Domain sind
 const API_BASE = "";
 
-// Klick auf "Los geht's"
-authBtn.addEventListener("click", async () => {
-  authError.textContent = "";
+// state
+let currentUser = null;
 
-  const mode = authMode.value;
-  const email = authEmail.value.trim();
-  const pass  = authPass.value.trim();
+// UI Elemente
+const authPanel = document.getElementById("authPanel");
+const errorBox = document.getElementById("errorBox");
+const authSubmitBtn = document.getElementById("authSubmitBtn");
+const inputMode = document.getElementById("inputMode");
+const inputName = document.getElementById("inputName");
+const inputEmail = document.getElementById("inputEmail");
+const inputPass = document.getElementById("inputPass");
+const inputLang = document.getElementById("inputLang");
+const inputAvatar = document.getElementById("inputAvatar");
+const inputColor = document.getElementById("inputColor");
+
+const uiUserName = document.getElementById("uiUserName");
+const uiUserRole = document.getElementById("uiUserRole");
+
+const profileAvatar = document.getElementById("profileAvatar");
+const profileName = document.getElementById("profileName");
+const profileRole = document.getElementById("profileRole");
+const profileLangValue = document.getElementById("profileLangValue");
+const profileCoinsValue = document.getElementById("profileCoinsValue");
+const profileLevelValue = document.getElementById("profileLevelValue");
+const profileNoteValue = document.getElementById("profileNoteValue");
+
+const chatMessages = document.getElementById("chatMessages");
+const chatInput = document.getElementById("chatInput");
+const sendBtn = document.getElementById("sendBtn");
+
+const onlineUsersDiv = document.getElementById("onlineUsers");
+const onlineCount = document.getElementById("onlineCount");
+
+const lobbyLangSelect = document.getElementById("lobbyLang");
+
+// Übersetzte UI-Texte
+const lobbyTranslations = {
+  de: {
+    lobbyTitle: "Lobby-Chat",
+    lobbySub: "Alle können hier schreiben 🦋",
+    onlineTitle: "Online jetzt",
+    startPrivateLabel: "Privatchat starten",
+    profileTitle: "Dein Profil",
+    profilePrivateLabel: "Privat",
+    labelProfileLang: "Sprache",
+    labelProfileCoins: "Coins",
+    labelProfileLevel: "Level",
+    labelProfileNote: "Status / Info über dich"
+  },
+  en: {
+    lobbyTitle: "Lobby Chat",
+    lobbySub: "Everyone can talk here 🦋",
+    onlineTitle: "Online now",
+    startPrivateLabel: "Start private chat",
+    profileTitle: "Your Profile",
+    profilePrivateLabel: "Private",
+    labelProfileLang: "Language",
+    labelProfileCoins: "Coins",
+    labelProfileLevel: "Level",
+    labelProfileNote: "Status / About you"
+  },
+  fr: {
+    lobbyTitle: "Salon général",
+    lobbySub: "Tout le monde peut parler ici 🦋",
+    onlineTitle: "En ligne",
+    startPrivateLabel: "Ouvrir un chat privé",
+    profileTitle: "Ton profil",
+    profilePrivateLabel: "Privé",
+    labelProfileLang: "Langue",
+    labelProfileCoins: "Pièces",
+    labelProfileLevel: "Niveau",
+    labelProfileNote: "Statut / À propos de toi"
+  },
+  hu: {
+    lobbyTitle: "Lobby chat",
+    lobbySub: "Itt mindenki beszélgethet 🦋",
+    onlineTitle: "Most online",
+    startPrivateLabel: "Privát chat indítása",
+    profileTitle: "Profilod",
+    profilePrivateLabel: "Privát",
+    labelProfileLang: "Nyelv",
+    labelProfileCoins: "Érmék",
+    labelProfileLevel: "Szint",
+    labelProfileNote: "Státusz / Rólad"
+  },
+  pl: {
+    lobbyTitle: "Czat lobby",
+    lobbySub: "Każdy może tu pisać 🦋",
+    onlineTitle: "Online teraz",
+    startPrivateLabel: "Rozpocznij prywatny czat",
+    profileTitle: "Twój profil",
+    profilePrivateLabel: "Prywatne",
+    labelProfileLang: "Język",
+    labelProfileCoins: "Monety",
+    labelProfileLevel: "Poziom",
+    labelProfileNote: "Status / O Tobie"
+  },
+  zh: {
+    lobbyTitle: "大厅聊天",
+    lobbySub: "大家都可以在这里说话 🦋",
+    onlineTitle: "在线",
+    startPrivateLabel: "开始私聊",
+    profileTitle: "你的资料",
+    profilePrivateLabel: "私密",
+    labelProfileLang: "语言",
+    labelProfileCoins: "金币",
+    labelProfileLevel: "等级",
+    labelProfileNote: "状态 / 个人信息"
+  },
+  es: {
+    lobbyTitle: "Chat de lobby",
+    lobbySub: "Todos pueden hablar aquí 🦋",
+    onlineTitle: "En línea ahora",
+    startPrivateLabel: "Iniciar chat privado",
+    profileTitle: "Tu perfil",
+    profilePrivateLabel: "Privado",
+    labelProfileLang: "Idioma",
+    labelProfileCoins: "Monedas",
+    labelProfileLevel: "Nivel",
+    labelProfileNote: "Estado / Sobre ti"
+  },
+  it: {
+    lobbyTitle: "Chat Lobby",
+    lobbySub: "Qui tutti possono parlare 🦋",
+    onlineTitle: "Online adesso",
+    startPrivateLabel: "Chat privata",
+    profileTitle: "Il tuo profilo",
+    profilePrivateLabel: "Privato",
+    labelProfileLang: "Lingua",
+    labelProfileCoins: "Monete",
+    labelProfileLevel: "Livello",
+    labelProfileNote: "Stato / Info su di te"
+  },
+  tr: {
+    lobbyTitle: "Lobi sohbeti",
+    lobbySub: "Herkes burada konuşabilir 🦋",
+    onlineTitle: "Şu an çevrimiçi",
+    startPrivateLabel: "Özel sohbet başlat",
+    profileTitle: "Profilin",
+    profilePrivateLabel: "Gizli",
+    labelProfileLang: "Dil",
+    labelProfileCoins: "Jetonlar",
+    labelProfileLevel: "Seviye",
+    labelProfileNote: "Durum / Hakkında"
+  },
+  ru: {
+    lobbyTitle: "Общий чат",
+    lobbySub: "Здесь могут говорить все 🦋",
+    onlineTitle: "Сейчас онлайн",
+    startPrivateLabel: "Личный чат",
+    profileTitle: "Твой профиль",
+    profilePrivateLabel: "Лично",
+    labelProfileLang: "Язык",
+    labelProfileCoins: "Монеты",
+    labelProfileLevel: "Уровень",
+    labelProfileNote: "Статус / О тебе"
+  }
+};
+
+function applyUILanguage(langCode) {
+  const t = lobbyTranslations[langCode] || lobbyTranslations["de"];
+  document.getElementById("lobbyTitle").textContent = t.lobbyTitle;
+  document.getElementById("lobbySub").textContent = t.lobbySub;
+  document.getElementById("onlineTitle").textContent = t.onlineTitle;
+  document.getElementById("startPrivateLabel").textContent = t.startPrivateLabel;
+  document.getElementById("profileTitle").textContent = t.profileTitle;
+  document.getElementById("profilePrivateLabel").textContent = t.profilePrivateLabel;
+  document.getElementById("labelProfileLang").textContent = t.labelProfileLang;
+  document.getElementById("labelProfileCoins").textContent = t.labelProfileCoins;
+  document.getElementById("labelProfileLevel").textContent = t.labelProfileLevel;
+  document.getElementById("labelProfileNote").textContent = t.labelProfileNote;
+}
+lobbyLangSelect.addEventListener("change", () => {
+  applyUILanguage(lobbyLangSelect.value);
+  loadMessages();
+});
+
+// Auth Button
+authSubmitBtn.addEventListener("click", async () => {
+  errorBox.textContent = "";
+
+  const mode = inputMode.value;
+  const nameVal = inputName.value.trim();
+  const emailVal = inputEmail.value.trim();
+  const passVal = inputPass.value.trim();
+  const langVal = inputLang.value;
+  const avatarVal = inputAvatar.value.trim() || "🙂";
+  const colorVal = inputColor.value.trim() || "#ff00d9";
 
   try {
     let resp;
     if (mode === "register") {
       resp = await fetch(API_BASE + "/api/register", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          name: authName.value.trim(),
-          email,
-          password: pass,
-          language: authLang.value,
-          avatar: authAvatar.value.trim() || "🙂",
-          neonColor: authColor.value.trim() || "#ff00d9"
+          name: nameVal,
+          email: emailVal,
+          password: passVal,
+          language: langVal,
+          avatar: avatarVal,
+          neonColor: colorVal
         })
       });
     } else {
       resp = await fetch(API_BASE + "/api/login", {
-        method:"POST",
-        headers:{ "Content-Type":"application/json" },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          email,
-          password: pass
+          email: emailVal,
+          password: passVal
         })
       });
     }
 
     const data = await resp.json();
     if (!resp.ok || data.error) {
-      authError.textContent = data.error || "Fehler.";
+      errorBox.textContent = data.error || "Fehler.";
       return;
     }
 
     currentUser = data.user;
-    showMainUI(currentUser);
+    updateUserUI();
+    authPanel.style.display = "none";
+
     loadMessages();
+    loadOnline();
+    loadProfile();
   } catch (err) {
-    authError.textContent = "Verbindungsfehler.";
+    errorBox.textContent = "Verbindungsfehler.";
   }
 });
 
-// Hauptebene sichtbar machen + Profil füllen
-function showMainUI(user){
-  if (!user) return;
-  authPanel.style.display = "none";
-  mainArea.style.display = "flex";
-
-  pName.textContent  = user.name;
-  pRole.textContent  = user.role;
-  pLang.textContent  = user.language || "-";
-  pLevel.textContent = user.level ?? "-";
-  pCoins.textContent = user.coins ?? "-";
-  pNote.textContent  = user.profileNote || "(kein Status gesetzt)";
-}
-
-// =======================
-// Chat laden + senden
-// =======================
-async function loadMessages(){
-  const res = await fetch(API_BASE + "/api/lobby/messages?lang=" + encodeURIComponent(currentUser?.language || "de"));
-  const data = await res.json();
-
-  chatMessagesDiv.innerHTML = "";
-  data.messages.forEach(m => {
-    const line = document.createElement("div");
-    line.className = "msgLine";
-    line.innerHTML =
-      "<span class='nick' style='color:" + m.neonColor + "'>" +
-      m.displayName +
-      "</span>: " +
-      m.text +
-      "<br><span style='color:#888;font-size:0.7rem;'>(" +
-      new Date(m.isoTime).toLocaleString() +
-      ", " + m.role + ")</span>";
-    chatMessagesDiv.appendChild(line);
-  });
-
-  chatMessagesDiv.scrollTop = chatMessagesDiv.scrollHeight;
-}
-
-chatSendBtn.addEventListener("click", async () => {
+// Nachricht senden
+sendBtn.addEventListener("click", async () => {
   if (!currentUser) {
     alert("Bitte erst einloggen.");
     return;
@@ -720,37 +1380,158 @@ chatSendBtn.addEventListener("click", async () => {
   const text = chatInput.value.trim();
   if (!text) return;
   chatInput.value = "";
-
   await fetch(API_BASE + "/api/lobby/messages", {
-    method:"POST",
-    headers:{ "Content-Type":"application/json" },
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
       userId: currentUser.id,
       text
     })
   });
-
   loadMessages();
 });
-</script>
 
-<div class="footerInfo" style="margin-top:2rem;">
-  Admin / Owner können nicht blockiert werden. Sexuelle / beleidigende Namen verboten.
-</div>
+// Nachrichten laden
+async function loadMessages() {
+  const lang = lobbyLangSelect.value;
+  const res = await fetch(API_BASE + "/api/lobby/messages?lang=" + encodeURIComponent(lang));
+  const data = await res.json();
+  chatMessages.innerHTML = "";
+  data.messages.forEach(m => {
+    const line = document.createElement("div");
+    line.className = "chat-line";
+
+    const av = document.createElement("div");
+    av.className = "chat-avatar";
+    av.textContent = m.avatar || "🙂";
+
+    const meta = document.createElement("div");
+    meta.className = "chat-meta";
+
+    const nameDiv = document.createElement("div");
+    nameDiv.className = "chat-name";
+    nameDiv.style.color = m.neonColor;
+    nameDiv.textContent = m.displayName;
+
+    const roleDiv = document.createElement("div");
+    roleDiv.className = "chat-role";
+    roleDiv.textContent = m.role;
+
+    meta.appendChild(nameDiv);
+    meta.appendChild(roleDiv);
+
+    const textDiv = document.createElement("div");
+    textDiv.className = "chat-text";
+    textDiv.textContent = m.translatedText;
+
+    const timeDiv = document.createElement("div");
+    timeDiv.className = "chat-time";
+    const d = new Date(m.time);
+    timeDiv.textContent = d.toLocaleString();
+
+    line.appendChild(av);
+    line.appendChild(meta);
+    line.appendChild(textDiv);
+    line.appendChild(timeDiv);
+
+    chatMessages.appendChild(line);
+  });
+
+  chatMessages.scrollTop = chatMessages.scrollHeight;
+}
+
+// Online Liste laden
+async function loadOnline() {
+  const res = await fetch(API_BASE + "/api/online");
+  const data = await res.json();
+  onlineUsersDiv.innerHTML = "";
+  onlineCount.textContent = data.users.length;
+  data.users.forEach(u => {
+    const row = document.createElement("div");
+    row.className = "online-user";
+
+    const av = document.createElement("div");
+    av.className = "online-avatar";
+    av.textContent = u.avatar;
+
+    const info = document.createElement("div");
+    info.style.minWidth = 0;
+    const nameEl = document.createElement("div");
+    nameEl.className = "online-name";
+    nameEl.style.color = u.neonColor;
+    nameEl.textContent = u.name;
+    const roleEl = document.createElement("div");
+    roleEl.className = "online-role";
+    roleEl.textContent = u.role;
+    info.appendChild(nameEl);
+    info.appendChild(roleEl);
+
+    const dm = document.createElement("div");
+    dm.className = "dm-btn";
+    dm.textContent = "DM";
+    dm.addEventListener("click", () => {
+      alert("Privatchat mit " + u.name + " (kommt noch).");
+    });
+
+    row.appendChild(av);
+    row.appendChild(info);
+    row.appendChild(dm);
+    onlineUsersDiv.appendChild(row);
+  });
+}
+
+// Profil anzeigen
+async function loadProfile() {
+  if (!currentUser) return;
+  const res = await fetch(API_BASE + "/api/profile/" + encodeURIComponent(currentUser.id));
+  const data = await res.json();
+  if (!res.ok || data.error) return;
+
+  profileAvatar.textContent = data.avatar || "🙂";
+  profileName.textContent = data.name;
+  profileName.style.color = data.neonColor || "#ff00d9";
+  profileRole.textContent = data.role || "-";
+  profileLangValue.textContent = data.language || "-";
+  profileCoinsValue.textContent = String(data.coins ?? "-");
+  profileLevelValue.textContent = String(data.level ?? "-");
+  profileNoteValue.textContent = data.profileNote || "(kein Status gesetzt)";
+
+  uiUserName.textContent = data.name;
+  uiUserRole.textContent = data.role || "-";
+}
+
+function updateUserUI() {
+  if (!currentUser) {
+    uiUserName.textContent = "– nicht eingeloggt –";
+    uiUserRole.textContent = "-";
+  } else {
+    uiUserName.textContent = currentUser.name;
+    uiUserRole.textContent = currentUser.role;
+  }
+}
+
+// Sprache initial auf Deutsch anwenden
+applyUILanguage(lobbyLangSelect.value);
+
+// "Profil bearbeiten"
+document.getElementById("editProfileBtn").addEventListener("click", () => {
+  alert("Hier später: Profilbild hochladen, Status ändern, Neonfarbe ändern, Titel usw.");
+});
+</script>
 
 </body>
 </html>
   `;
-  res.setHeader("Content-Type","text/html; charset=utf-8");
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
   res.send(html);
 });
 
-// ==============================
+// -------------------------------------------------
 // SERVER START
-// ==============================
+// -------------------------------------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ ButterflyMusic Freunde App Server läuft auf Port " + PORT);
+  console.log(`✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT}`);
 });
 
 
