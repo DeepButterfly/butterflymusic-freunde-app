@@ -412,6 +412,8 @@ app.post("/api/music/upload", (req, res) => {
   return res.status(403).json({
     error: "Musik-Upload ist geschützt / Filter aktiv / kommt später.",
   });
+});
+
 // -------------------------------------------------
 // Server starten (Render-kompatibel)
 const PORT = process.env.PORT || 3000;
@@ -419,4 +421,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT}`);
 });
+
 
