@@ -1,58 +1,22 @@
-// ButterflyMusic Freunde App Backend
-// Version: Stufe 1 (Login, Chat, Coins, Level, Online, Profile)
 const express = require("express");
 const cors = require("cors");
-const app = express();
 
+const app = express();
 app.use(cors());
 app.use(express.json());
 
-// ---------------------------------------------
-// ROLES / KONFIGURATION
-// ---------------------------------------------
+// ---- ROLES ----
 const ROLES = {
   OWNER: "owner",
   ADMIN: "admin",
-  MOD: "mod",
-  USER: "user",
+  USER: "user"
 };
 
-const RESERVED_NAMES = [
-  "deepbutterflymusic",
-  "dethoxia",
-  "darkinfernal",
-  "dethox"
-];
-
-const BANNED_WORDS = [
-  "pimmel","schlampe","fotze","hurensohn","nutte","arsch",
-  "sex","fick","ficken","dick","cock","pussy","penis",
-  "titte","titten","boobs","porno","porn"
-];
-
-// Name normalisieren
-function normalizeName(str) {
-  return (str || "")
-    .toLowerCase()
-    .replace(/0/g, "o")
-    .replace(/1/g, "i")
-    .replace(/3/g, "e")
-    .replace(/4/g, "a")
-    .replace(/@/g, "a")
-    .replace(/\$/g, "s")
-    .replace(/5/g, "s")
-    .replace(/7/g, "t")
-    .trim();
-}
-
-// ---------------------------------------------
-// "In-Memory"-Datenbank
-// ---------------------------------------------
+// ---- USERS (simulierte Datenbank im Speicher) ----
 const users = [
   {
     id: "1",
     name: "DeepButterflyMusic",
-    normalizedName: "deepbutterflymusic",
     email: "owner@example.com",
     password: "supergeheim",
     avatar: "🦋",
@@ -61,14 +25,11 @@ const users = [
     role: ROLES.OWNER,
     coins: 50000,
     level: 1,
-    xp: 0,
-    canBeBlocked: false,
-    profileNote: "Be nice or leave ✨"
+    profileNote: "Be nice or leave"
   },
   {
     id: "2",
     name: "Dethoxia",
-    normalizedName: "dethoxia",
     email: "dethoxia@example.com",
     password: "dethoxia123",
     avatar: "😎",
@@ -77,30 +38,11 @@ const users = [
     role: ROLES.ADMIN,
     coins: 20000,
     level: 1,
-    xp: 0,
-    canBeBlocked: false,
     profileNote: "Co-Admin Account"
   },
   {
     id: "3",
-    name: "DarkInfernal",
-    normalizedName: "darkinfernal",
-    email: "darkinfernal@example.com",
-    password: "infernal123",
-    avatar: "🔥",
-    neonColor: "#ff3300",
-    language: "de",
-    role: ROLES.ADMIN,
-    coins: 15000,
-    level: 3,
-    xp: 50,
-    canBeBlocked: false,
-    profileNote: "Admin / Partner-Account"
-  },
-  {
-    id: "4",
     name: "TestUser01",
-    normalizedName: "testuser01",
     email: "user@example.com",
     password: "user12345",
     avatar: "🙂",
@@ -109,53 +51,96 @@ const users = [
     role: ROLES.USER,
     coins: 200,
     level: 1,
-    xp: 10,
-    canBeBlocked: true,
-    profileNote: "Ich liebe Neon 😍"
+    profileNote: "Ich liebe Neon"
   }
 ];
 
-const onlineUsers = new Set(["1", "2", "3", "4"]);
+// Wir tun so, als wären alle online:
+const onlineUsers = new Set(["1","2","3"]);
 
-const LEVEL_CFG = { MAX_LEVEL: 500, XP_PER_LEVEL: 100 };
-
-function addXPandCoins(u, xpGain, coinGain) {
-  u.xp = (u.xp || 0) + xpGain;
-  u.coins = (u.coins || 0) + coinGain;
-  while (u.xp >= LEVEL_CFG.XP_PER_LEVEL) {
-    u.xp -= LEVEL_CFG.XP_PER_LEVEL;
-    u.level = (u.level || 1) + 1;
-    if (u.level > LEVEL_CFG.MAX_LEVEL) u.level = 1;
-  }
-}
-
+// Chat Verlauf Start
 const lobbyMessages = [
   {
     fromUserId: "1",
-    avatar: "🦋",
     displayName: "DeepButterflyMusic",
+    avatar: "🦋",
     neonColor: "#ff00d9",
     role: "owner",
-    text: "Willkommen in der ButterflyMusic Freunde App 💜 Bitte bleibt respektvoll.",
+    text: "Willkommen in der ButterflyMusic Freunde App. Bitte bleibt respektvoll.",
     timestamp: Date.now()
   }
 ];
 
+// ---- HELFER ----
 function findUserByEmail(email) {
-  return users.find(
-    u => u.email.toLowerCase() === (email || "").toLowerCase()
-  );
+  const lower = (email || "").toLowerCase();
+  return users.find(u => u.email.toLowerCase() === lower);
 }
 
-function translateMessage(text, lang) {
-  return `[${lang}] ${text}`;
-}
+// ---- TEST-ROUTE FÜR DICH ----
+// Wenn du deine Render-URL im Browser öffnest, MUSS das hier kommen.
+app.get("/", (req, res) => {
+  res.type("html").send(`
+    <html>
+      <head>
+        <meta charset="utf-8" />
+        <title>ButterflyMusic Freunde App</title>
+        <style>
+          body { background:#000; color:#ff00d9; font-family: sans-serif; text-align:center; padding:40px; }
+          .box { background:#111; border:1px solid #ff00d9; padding:20px; border-radius:10px; max-width:400px; margin:0 auto; box-shadow:0 0 20px #ff00d9; }
+          h1 { font-size:18px; line-height:1.4; color:#fff; text-shadow:0 0 8px #ff00d9,0 0 20px #00ffff; }
+          p { font-size:14px; color:#ccc; }
+          code { color:#0f0; font-size:12px; white-space:pre-wrap; word-break:break-word; }
+        </style>
+      </head>
+      <body>
+        <div class="box">
+          <h1>ButterflyMusic Freunde App Backend läuft</h1>
+          <p>Wenn du das hier siehst, ist der Server online.</p>
+          <p>Teste API z. B. /api/online oder /api/lobby/messages</p>
+        </div>
+      </body>
+    </html>
+  `);
+});
 
-// ---------------------------------------------
-// API: Registrierung
-// ---------------------------------------------
+// ---- API: Login ----
+app.post("/api/login", (req, res) => {
+  const email = req.body.email || "";
+  const password = req.body.password || "";
+
+  const u = findUserByEmail(email);
+  if (!u || u.password !== password) {
+    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
+  }
+
+  onlineUsers.add(u.id);
+
+  return res.json({
+    ok: true,
+    user: {
+      id: u.id,
+      name: u.name,
+      role: u.role,
+      avatar: u.avatar,
+      neonColor: u.neonColor,
+      language: u.language,
+      coins: u.coins,
+      level: u.level,
+      profileNote: u.profileNote
+    }
+  });
+});
+
+// ---- API: Registrieren ----
 app.post("/api/register", (req, res) => {
-  const { name, email, password, language, avatar, neonColor } = req.body;
+  const name = (req.body.name || "").trim();
+  const email = (req.body.email || "").trim().toLowerCase();
+  const password = req.body.password || "";
+  const language = req.body.language || "de";
+  const avatar = req.body.avatar || "🙂";
+  const neonColor = req.body.neonColor || "#ff00d9";
+
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Fehlende Daten." });
   }
@@ -163,18 +148,9 @@ app.post("/api/register", (req, res) => {
     return res.status(400).json({ error: "Name zu kurz (min. 6 Zeichen)." });
   }
 
-  const lowered = name.toLowerCase();
-  if (BANNED_WORDS.some(w => lowered.includes(w))) {
-    return res.status(400).json({ error: "Dieser Name ist nicht erlaubt." });
-  }
-
-  const norm = normalizeName(name);
-  if (RESERVED_NAMES.includes(norm)) {
+  const reserved = ["deepbutterflymusic","dethoxia","darkinfernal","dethox"];
+  if (reserved.includes(name.toLowerCase())) {
     return res.status(403).json({ error: "Dieser Name ist reserviert." });
-  }
-
-  if (users.find(u => u.normalizedName === norm)) {
-    return res.status(400).json({ error: "Name existiert schon / zu ähnlich." });
   }
 
   if (findUserByEmail(email)) {
@@ -182,83 +158,80 @@ app.post("/api/register", (req, res) => {
   }
 
   const newUser = {
-    id: String(Date.now()),
+    id: Date.now().toString(),
     name,
-    normalizedName: norm,
     email,
     password,
-    avatar: avatar || "🙂",
-    neonColor: neonColor || "#ff00d9",
-    language: language || "de",
+    avatar,
+    neonColor,
+    language,
     role: ROLES.USER,
     coins: 0,
     level: 1,
-    xp: 0,
-    canBeBlocked: true,
     profileNote: ""
   };
 
   users.push(newUser);
   onlineUsers.add(newUser.id);
 
-  res.json({ ok: true, user: newUser });
+  return res.json({
+    ok: true,
+    user: {
+      id: newUser.id,
+      name: newUser.name,
+      role: newUser.role,
+      avatar: newUser.avatar,
+      neonColor: newUser.neonColor,
+      language: newUser.language,
+      coins: newUser.coins,
+      level: newUser.level,
+      profileNote: newUser.profileNote
+    }
+  });
 });
 
-// ---------------------------------------------
-// API: Login
-// ---------------------------------------------
-app.post("/api/login", (req, res) => {
-  const { email, password } = req.body;
-  const u = findUserByEmail(email || "");
-  if (!u || u.password !== password) {
-    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
-  }
-  onlineUsers.add(u.id);
-  res.json({ ok: true, user: u });
-});
-
-// ---------------------------------------------
-// API: Chatnachrichten lesen
-// ---------------------------------------------
+// ---- API: Chat lesen ----
 app.get("/api/lobby/messages", (req, res) => {
-  const lang = req.query.lang || "de";
   const out = lobbyMessages.map(m => ({
-    avatar: m.avatar,
     displayName: m.displayName,
+    avatar: m.avatar,
     neonColor: m.neonColor,
     role: m.role,
-    translatedText: translateMessage(m.text, lang),
+    text: m.text,
     time: new Date(m.timestamp).toISOString()
   }));
-  res.json({ messages: out });
+  return res.json({ messages: out });
 });
 
-// ---------------------------------------------
-// API: Nachricht senden
-// ---------------------------------------------
+// ---- API: Chat schreiben ----
 app.post("/api/lobby/messages", (req, res) => {
-  const { userId, text } = req.body;
-  if (!text || !text.trim()) {
+  const userId = req.body.userId;
+  const text = (req.body.text || "").trim();
+
+  if (!text) {
     return res.status(400).json({ error: "Kein Text." });
   }
+
   const u = users.find(x => x.id === userId);
-  if (!u) return res.status(401).json({ error: "User nicht gefunden." });
-  addXPandCoins(u, 5, 1);
-  lobbyMessages.push({
+  if (!u) {
+    return res.status(401).json({ error: "User nicht gefunden / nicht eingeloggt." });
+  }
+
+  const msg = {
     fromUserId: u.id,
-    avatar: u.avatar,
     displayName: u.name,
+    avatar: u.avatar,
     neonColor: u.neonColor,
     role: u.role,
-    text: text.trim(),
+    text: text,
     timestamp: Date.now()
-  });
-  res.json({ ok: true });
+  };
+
+  lobbyMessages.push(msg);
+  return res.json({ ok: true });
 });
 
-// ---------------------------------------------
-// API: Online-Liste
-// ---------------------------------------------
+// ---- API: Wer ist online ----
 app.get("/api/online", (req, res) => {
   const list = users
     .filter(u => onlineUsers.has(u.id))
@@ -269,24 +242,33 @@ app.get("/api/online", (req, res) => {
       neonColor: u.neonColor,
       role: u.role
     }));
-  res.json({ users: list });
+  return res.json({ users: list });
 });
 
-// ---------------------------------------------
-// API: Profil abrufen
-// ---------------------------------------------
+// ---- API: Profil ----
 app.get("/api/profile/:uid", (req, res) => {
-  const u = users.find(x => x.id === req.params.uid);
-  if (!u) return res.status(404).json({ error: "User nicht gefunden." });
-  res.json(u);
+  const uid = req.params.uid;
+  const u = users.find(x => x.id === uid);
+  if (!u) {
+    return res.status(404).json({ error: "User nicht gefunden." });
+  }
+  return res.json({
+    id: u.id,
+    name: u.name,
+    avatar: u.avatar,
+    neonColor: u.neonColor,
+    language: u.language,
+    role: u.role,
+    coins: u.coins,
+    level: u.level,
+    profileNote: u.profileNote
+  });
 });
 
-// ---------------------------------------------
-// START SERVER
-// ---------------------------------------------
+// ---- SERVER START ----
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ ButterflyMusic Freunde App Backend läuft auf Port ${PORT}`);
+  console.log("ButterflyMusic Freunde App Backend läuft auf Port " + PORT);
 });
 
 
