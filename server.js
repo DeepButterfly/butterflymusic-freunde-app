@@ -1,16 +1,18 @@
 // server.js
-// ButterflyMusic Freunde App Backend
-// passt zu deiner index.html mit Neon-Lobby
+// ButterflyMusic Freunde App - ALLES in einem File (Frontend + Backend)
 
 const express = require("express");
 const cors = require("cors");
-
 const app = express();
+
+// -------------------------------------------------
+// MIDDLEWARE
+// -------------------------------------------------
 app.use(cors());
 app.use(express.json());
 
 // -------------------------------------------------
-// ROLES / NAMEN / VERBOTENE WÖRTER
+// KONFIG / KONSTANTEN
 // -------------------------------------------------
 const ROLES = {
   OWNER: "owner",
@@ -32,7 +34,6 @@ const BANNED_WORDS = [
   "titte","titten","boobs"
 ];
 
-// Hilfsfunktion um Namen zu vergleichen ohne Tricks wie P1mmel
 function normalizeName(str) {
   return (str || "")
     .toLowerCase()
@@ -48,10 +49,8 @@ function normalizeName(str) {
 }
 
 // -------------------------------------------------
-// "Datenbank" im Speicher (RAM) – nur zum Start
-// Später kann das in echte DB umziehen.
+// IN-MEMORY "DATENBANK"
 // -------------------------------------------------
-
 const users = [
   {
     id: "1",
@@ -119,16 +118,13 @@ const users = [
   }
 ];
 
-// Wer gerade online ist
 const onlineUsers = new Set(["1","2","3","4"]);
 
-// Level-System Basics
 const LEVEL_CFG = {
   MAX_LEVEL: 500,
   XP_PER_LEVEL: 100,
 };
 
-// Chat-Verlauf in der Lobby
 const lobbyMessages = [
   {
     fromUserId: "1",
@@ -140,10 +136,6 @@ const lobbyMessages = [
     timestamp: Date.now(),
   }
 ];
-
-// -------------------------------------------------
-// Hilfsfunktionen
-// -------------------------------------------------
 
 function findUserByEmail(email) {
   return users.find(
@@ -157,20 +149,18 @@ function giveXP(user, amount) {
     user.xp -= LEVEL_CFG.XP_PER_LEVEL;
     user.level = (user.level || 1) + 1;
     if (user.level > LEVEL_CFG.MAX_LEVEL) {
-      // Reset nach 500
       user.level = 1;
-      // Später: hier könnte man ein "Prestige Badge" vergeben
     }
   }
 }
 
-// Platzhalter-Übersetzung (später echte Übersetzung)
+// Fake-Übersetzung fürs UI (Platzhalter)
 function translateMessage(text, lang) {
   return `[${lang}] ${text}`;
 }
 
 // -------------------------------------------------
-// ROUTE: Registrierung
+// API: REGISTRIEREN
 // -------------------------------------------------
 app.post("/api/register", (req, res) => {
   const { name, email, password, language, avatar, neonColor } = req.body;
@@ -192,12 +182,10 @@ app.post("/api/register", (req, res) => {
     return res.status(403).json({ error: "Dieser Name ist reserviert." });
   }
 
-  // Name darf nicht fast identisch wie bestehende sein
   if (users.find(u => u.normalizedName === norm)) {
     return res.status(400).json({ error: "Name existiert schon / zu ähnlich." });
   }
 
-  // E-Mail darf nicht doppelt sein
   if (findUserByEmail(email)) {
     return res.status(400).json({ error: "E-Mail schon vergeben." });
   }
@@ -207,7 +195,7 @@ app.post("/api/register", (req, res) => {
     name,
     normalizedName: norm,
     email,
-    password, // ⚠ später mit Hash absichern
+    password, // TODO: hashen in echter Version
     avatar: avatar || "🙂",
     neonColor: neonColor || "#ff00d9",
     language: language || "de",
@@ -238,17 +226,13 @@ app.post("/api/register", (req, res) => {
 });
 
 // -------------------------------------------------
-// ROUTE: Login
+// API: LOGIN
 // -------------------------------------------------
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
 
   const u = findUserByEmail(email || "");
-  if (!u) {
-    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
-  }
-
-  if (u.password !== password) {
+  if (!u || u.password !== password) {
     return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
   }
 
@@ -271,7 +255,7 @@ app.post("/api/login", (req, res) => {
 });
 
 // -------------------------------------------------
-// ROUTE: Lobby Nachrichten abrufen (mit Übersetzung)
+// API: CHAT LADEN
 // -------------------------------------------------
 app.get("/api/lobby/messages", (req, res) => {
   const lang = req.query.lang || "de";
@@ -289,7 +273,7 @@ app.get("/api/lobby/messages", (req, res) => {
 });
 
 // -------------------------------------------------
-// ROUTE: Neue Chat-Nachricht senden
+// API: CHAT SENDEN
 // -------------------------------------------------
 app.post("/api/lobby/messages", (req, res) => {
   const { userId, text } = req.body;
@@ -303,7 +287,6 @@ app.post("/api/lobby/messages", (req, res) => {
     return res.status(401).json({ error: "User nicht gefunden / nicht eingeloggt." });
   }
 
-  // Level/Coins Belohnung fürs Schreiben
   giveXP(u, 5);
   u.coins += 1;
 
@@ -323,7 +306,7 @@ app.post("/api/lobby/messages", (req, res) => {
 });
 
 // -------------------------------------------------
-// ROUTE: Wer ist online
+// API: ONLINE-LISTE
 // -------------------------------------------------
 app.get("/api/online", (req, res) => {
   const list = users
@@ -340,7 +323,7 @@ app.get("/api/online", (req, res) => {
 });
 
 // -------------------------------------------------
-// ROUTE: Profildaten holen
+// API: PROFIL
 // -------------------------------------------------
 app.get("/api/profile/:uid", (req, res) => {
   const uid = req.params.uid;
@@ -362,13 +345,46 @@ app.get("/api/profile/:uid", (req, res) => {
 });
 
 // -------------------------------------------------
-// START SERVER (Render-kompatibel)
+// FRONTEND AUSLIEFERN (DEINE NEON-SEITE)
+// -------------------------------------------------
+app.get("/", (req, res) => {
+  // Hier schicken wir deine komplette index.html raus
+  res.type("html").send(`
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ButterflyMusic Freunde App</title>
+<style>
+${/* ---- dein kompletter <style> Block von oben ---- */""}
+
+/* ... GANZER CSS CODE AUS DEINER index.html HIER EINFÜGEN ...
+   ALLES von <style> bis </style> OHNE die style-Tags selbst nochmal
+   (weil wir ja schon <style> hier eröffnen könnten,
+   ABER: Render mag sehr große Strings, das ist ok) */
+</style>
+</head>
+<body>
+<!-- Hier kommt dein kompletter <body> Inhalt aus deiner index.html,
+     also Glitzer, Header, Main, Login-Overlay, und das <script> am Ende,
+     ABER mit einer kleinen Änderung:
+     const API_BASE = "" soll hier auf dieselbe Render-URL zeigen.
+     Also:
+     const API_BASE = "";
+     weil jetzt frontend == backend in derselben Domain läuft.
+-->
+</body>
+</html>
+  `);
+});
+
+// -------------------------------------------------
+// SERVER START
 // -------------------------------------------------
 const PORT = process.env.PORT || 3000;
-
-// ganz wichtig für Render: 0.0.0.0 binden
 app.listen(PORT, "0.0.0.0", () => {
-  console.log(`✅ ButterflyMusic Freunde App Backend läuft auf Port ${PORT}`);
+  console.log("✅ ButterflyMusic Freunde App läuft auf Port " + PORT);
 });
 
 
