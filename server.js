@@ -1,18 +1,15 @@
-// server.js
-// ButterflyMusic Freunde App – Stufe 1
-// Frontend (Neon-Lobby) + Backend (Login, Chat, Coins, Level)
-
+// ButterflyMusic Freunde App Backend
+// Version: Stufe 1 (Login, Chat, Coins, Level, Online, Profile)
 const express = require("express");
 const cors = require("cors");
 const app = express();
 
-// Middleware
 app.use(cors());
 app.use(express.json());
 
-// -------------------------------------------------
-// KONFIG / KONSTANTEN
-// -------------------------------------------------
+// ---------------------------------------------
+// ROLES / KONFIGURATION
+// ---------------------------------------------
 const ROLES = {
   OWNER: "owner",
   ADMIN: "admin",
@@ -33,7 +30,7 @@ const BANNED_WORDS = [
   "titte","titten","boobs","porno","porn"
 ];
 
-// Name vereinheitlichen für Vergleich / Filter
+// Name normalisieren
 function normalizeName(str) {
   return (str || "")
     .toLowerCase()
@@ -48,10 +45,9 @@ function normalizeName(str) {
     .trim();
 }
 
-// -------------------------------------------------
-// "Datenbank" im RAM (nur zum Starten)
-// Später kommt da echte DB hin.
-// -------------------------------------------------
+// ---------------------------------------------
+// "In-Memory"-Datenbank
+// ---------------------------------------------
 const users = [
   {
     id: "1",
@@ -119,32 +115,20 @@ const users = [
   }
 ];
 
-// Wer wird als "online" angezeigt beim Start:
-const onlineUsers = new Set(["1","2","3","4"]);
+const onlineUsers = new Set(["1", "2", "3", "4"]);
 
-// Level-/Coin-System
-const LEVEL_CFG = {
-  MAX_LEVEL: 500,
-  XP_PER_LEVEL: 100
-};
+const LEVEL_CFG = { MAX_LEVEL: 500, XP_PER_LEVEL: 100 };
 
 function addXPandCoins(u, xpGain, coinGain) {
   u.xp = (u.xp || 0) + xpGain;
   u.coins = (u.coins || 0) + coinGain;
-
   while (u.xp >= LEVEL_CFG.XP_PER_LEVEL) {
     u.xp -= LEVEL_CFG.XP_PER_LEVEL;
     u.level = (u.level || 1) + 1;
-
-    if (u.level > LEVEL_CFG.MAX_LEVEL) {
-      // Prestige-Reset:
-      // Level wieder 1, wir könnten hier später ein Badge vergeben
-      u.level = 1;
-    }
+    if (u.level > LEVEL_CFG.MAX_LEVEL) u.level = 1;
   }
 }
 
-// erster Chatverlauf
 const lobbyMessages = [
   {
     fromUserId: "1",
@@ -157,26 +141,21 @@ const lobbyMessages = [
   }
 ];
 
-// -------------------------------------------------
-// Hilfsfunktionen
-// -------------------------------------------------
 function findUserByEmail(email) {
   return users.find(
     u => u.email.toLowerCase() === (email || "").toLowerCase()
   );
 }
 
-// Platzhalter-"Übersetzung"
 function translateMessage(text, lang) {
   return `[${lang}] ${text}`;
 }
 
-// -------------------------------------------------
+// ---------------------------------------------
 // API: Registrierung
-// -------------------------------------------------
+// ---------------------------------------------
 app.post("/api/register", (req, res) => {
   const { name, email, password, language, avatar, neonColor } = req.body;
-
   if (!name || !email || !password) {
     return res.status(400).json({ error: "Fehlende Daten." });
   }
@@ -184,8 +163,8 @@ app.post("/api/register", (req, res) => {
     return res.status(400).json({ error: "Name zu kurz (min. 6 Zeichen)." });
   }
 
-  const loweredName = (name || "").toLowerCase();
-  if (BANNED_WORDS.some(w => loweredName.includes(w))) {
+  const lowered = name.toLowerCase();
+  if (BANNED_WORDS.some(w => lowered.includes(w))) {
     return res.status(400).json({ error: "Dieser Name ist nicht erlaubt." });
   }
 
@@ -194,12 +173,10 @@ app.post("/api/register", (req, res) => {
     return res.status(403).json({ error: "Dieser Name ist reserviert." });
   }
 
-  // kein fast gleicher Name doppelt
   if (users.find(u => u.normalizedName === norm)) {
     return res.status(400).json({ error: "Name existiert schon / zu ähnlich." });
   }
 
-  // doppelte E-Mail verhindern
   if (findUserByEmail(email)) {
     return res.status(400).json({ error: "E-Mail schon vergeben." });
   }
@@ -209,7 +186,7 @@ app.post("/api/register", (req, res) => {
     name,
     normalizedName: norm,
     email,
-    password, // ACHTUNG: später bitte hashen!
+    password,
     avatar: avatar || "🙂",
     neonColor: neonColor || "#ff00d9",
     language: language || "de",
@@ -224,57 +201,27 @@ app.post("/api/register", (req, res) => {
   users.push(newUser);
   onlineUsers.add(newUser.id);
 
-  return res.json({
-    ok: true,
-    user: {
-      id: newUser.id,
-      name: newUser.name,
-      role: newUser.role,
-      avatar: newUser.avatar,
-      neonColor: newUser.neonColor,
-      coins: newUser.coins,
-      level: newUser.level,
-      language: newUser.language,
-      profileNote: newUser.profileNote
-    }
-  });
+  res.json({ ok: true, user: newUser });
 });
 
-// -------------------------------------------------
+// ---------------------------------------------
 // API: Login
-// -------------------------------------------------
+// ---------------------------------------------
 app.post("/api/login", (req, res) => {
   const { email, password } = req.body;
-
   const u = findUserByEmail(email || "");
   if (!u || u.password !== password) {
     return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
   }
-
   onlineUsers.add(u.id);
-
-  return res.json({
-    ok: true,
-    user: {
-      id: u.id,
-      name: u.name,
-      role: u.role,
-      level: u.level,
-      coins: u.coins,
-      avatar: u.avatar,
-      neonColor: u.neonColor,
-      language: u.language,
-      profileNote: u.profileNote || ""
-    }
-  });
+  res.json({ ok: true, user: u });
 });
 
-// -------------------------------------------------
-// API: Nachrichten der Lobby laden
-// -------------------------------------------------
+// ---------------------------------------------
+// API: Chatnachrichten lesen
+// ---------------------------------------------
 app.get("/api/lobby/messages", (req, res) => {
   const lang = req.query.lang || "de";
-
   const out = lobbyMessages.map(m => ({
     avatar: m.avatar,
     displayName: m.displayName,
@@ -283,29 +230,21 @@ app.get("/api/lobby/messages", (req, res) => {
     translatedText: translateMessage(m.text, lang),
     time: new Date(m.timestamp).toISOString()
   }));
-
   res.json({ messages: out });
 });
 
-// -------------------------------------------------
-// API: Nachricht schicken
-// -------------------------------------------------
+// ---------------------------------------------
+// API: Nachricht senden
+// ---------------------------------------------
 app.post("/api/lobby/messages", (req, res) => {
   const { userId, text } = req.body;
-
   if (!text || !text.trim()) {
     return res.status(400).json({ error: "Kein Text." });
   }
-
   const u = users.find(x => x.id === userId);
-  if (!u) {
-    return res.status(401).json({ error: "User nicht gefunden / nicht eingeloggt." });
-  }
-
-  // Coins + XP fürs Schreiben
+  if (!u) return res.status(401).json({ error: "User nicht gefunden." });
   addXPandCoins(u, 5, 1);
-
-  const msg = {
+  lobbyMessages.push({
     fromUserId: u.id,
     avatar: u.avatar,
     displayName: u.name,
@@ -313,16 +252,13 @@ app.post("/api/lobby/messages", (req, res) => {
     role: u.role,
     text: text.trim(),
     timestamp: Date.now()
-  };
-
-  lobbyMessages.push(msg);
-
-  return res.json({ ok: true });
+  });
+  res.json({ ok: true });
 });
 
-// -------------------------------------------------
-// API: Wer ist online
-// -------------------------------------------------
+// ---------------------------------------------
+// API: Online-Liste
+// ---------------------------------------------
 app.get("/api/online", (req, res) => {
   const list = users
     .filter(u => onlineUsers.has(u.id))
@@ -333,259 +269,24 @@ app.get("/api/online", (req, res) => {
       neonColor: u.neonColor,
       role: u.role
     }));
-
   res.json({ users: list });
 });
 
-// -------------------------------------------------
-// API: Profil holen
-// -------------------------------------------------
+// ---------------------------------------------
+// API: Profil abrufen
+// ---------------------------------------------
 app.get("/api/profile/:uid", (req, res) => {
-  const uid = req.params.uid;
-  const u = users.find(x => x.id === uid);
+  const u = users.find(x => x.id === req.params.uid);
   if (!u) return res.status(404).json({ error: "User nicht gefunden." });
-
-  res.json({
-    id: u.id,
-    name: u.name,
-    avatar: u.avatar,
-    neonColor: u.neonColor,
-    language: u.language,
-    role: u.role,
-    coins: u.coins,
-    level: u.level,
-    xp: u.xp,
-    profileNote: u.profileNote || ""
-  });
+  res.json(u);
 });
 
-// -------------------------------------------------
-// FRONTEND ausliefern
-// Das ist deine komplette Neon-Oberfläche als eine Seite
-// -------------------------------------------------
-app.get("/", (req, res) => {
-  // Hier kommt deine HTML aus index.html rein.
-  // WICHTIG: API_BASE zeigt jetzt auf dieselbe Domain (leer = gleicher Server)
-  res.type("html").send(`<!DOCTYPE html>
-<html lang="de">
-<head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1.0" />
-<title>ButterflyMusic Freunde App</title>
-<style>
-/* ------ DEIN CSS 1:1 (abgekürzt hier im Chat nicht nochmal wiederholen) ---- */
-/* Du nimmst GENAU den kompletten <style> Block aus deiner Version
-   und fügst ihn hier ein, anstelle von diesem Kommentar.
-   ALLES von @keyframes pulseGlow ... bis zum @media ... { }  */
-</style>
-</head>
-<body>
-
-<!-- ------ DEIN BODY 1:1 ------ -->
-<!-- Glitzer -->
-<div class="sparkle s1"></div>
-<div class="sparkle s2"></div>
-<div class="sparkle s3"></div>
-<div class="sparkle s4"></div>
-<div class="sparkle s5"></div>
-
-<header>
-  <div class="app-left">
-    <div class="logo-circle">🦋</div>
-    <div class="app-title-block">
-      <div class="app-name">ButterflyMusic Freunde App</div>
-      <div class="app-sub">Lobby / Community-Zentrale</div>
-    </div>
-  </div>
-
-  <div class="app-right">
-    <div class="user-info">
-      <div class="name" id="uiUserName">– nicht eingeloggt –</div>
-      <div class="role" id="uiUserRole">-</div>
-    </div>
-
-    <div class="lang-select-wrap">
-      <label for="lobbyLang">Sprache</label>
-      <select id="lobbyLang">
-        <option value="de">Deutsch</option>
-        <option value="en">English</option>
-        <option value="fr">Français</option>
-        <option value="hu">Magyar</option>
-        <option value="pl">Polski</option>
-        <option value="zh">中文</option>
-        <option value="es">Español</option>
-        <option value="it">Italiano</option>
-        <option value="tr">Türkçe</option>
-        <option value="ru">Русский</option>
-      </select>
-    </div>
-  </div>
-</header>
-
-<main>
-  <section class="panel" id="chatPanel">
-    <div class="panel-header">
-      <div class="title">
-        <div class="title-main" id="lobbyTitle">Lobby-Chat</div>
-        <div class="title-sub" id="lobbySub">Alle können hier schreiben 🦋</div>
-      </div>
-      <div style="font-size:0.7rem;color:var(--text-dim);">
-        <span id="onlineCount">0</span> online
-      </div>
-    </div>
-
-    <div class="chat-messages" id="chatMessages"></div>
-
-    <div class="chat-input-area">
-      <input id="chatInput" type="text" placeholder="Nachricht schreiben..." />
-      <button id="sendBtn">Senden</button>
-    </div>
-  </section>
-
-  <section class="side-col">
-    <div class="box">
-      <div class="box-head">
-        <span id="onlineTitle">Online jetzt</span>
-        <span style="font-size:0.7rem;color:var(--text-dim);" id="startPrivateLabel">Privatchat starten</span>
-      </div>
-      <div class="online-scroll" id="onlineUsers"></div>
-    </div>
-
-    <div class="box">
-      <div class="box-head">
-        <span id="profileTitle">Dein Profil</span>
-        <span style="font-size:0.6rem;color:var(--text-dim);" id="profilePrivateLabel">Privat</span>
-      </div>
-      <div class="profile-body" id="profileArea">
-        <div class="profile-topline">
-          <div class="profile-avatar" id="profileAvatar">🦋</div>
-          <div class="profile-nameblock">
-            <div class="profile-name" id="profileName" style="color:#ff00d9;">
-              – nicht eingeloggt –
-            </div>
-            <div class="profile-role" id="profileRole">-</div>
-          </div>
-        </div>
-
-        <div class="profile-row">
-          <label id="labelProfileLang">Sprache</label>
-          <div class="value" id="profileLangValue">-</div>
-        </div>
-
-        <div class="profile-row">
-          <label id="labelProfileCoins">Coins</label>
-          <div class="value" id="profileCoinsValue">-</div>
-        </div>
-
-        <div class="profile-row">
-          <label id="labelProfileLevel">Level</label>
-          <div class="value" id="profileLevelValue">-</div>
-        </div>
-
-        <div class="profile-row">
-          <label id="labelProfileNote">Status / Info über dich</label>
-          <div class="value" id="profileNoteValue">(Bitte einloggen)</div>
-        </div>
-
-        <div class="edit-profile-btn" id="editProfileBtn">
-          Profil bearbeiten
-        </div>
-      </div>
-    </div>
-  </section>
-</main>
-
-<div id="authPanel">
-  <div class="auth-card">
-    <div class="auth-title">Willkommen 🦋</div>
-    <div class="auth-sub">
-      ButterflyMusic Freunde App<br/>
-      Bitte einloggen oder registrieren.
-    </div>
-
-    <div class="auth-row">
-      <label for="inputMode">Modus</label>
-      <select id="inputMode">
-        <option value="login">Einloggen</option>
-        <option value="register">Registrieren</option>
-      </select>
-    </div>
-
-    <div class="auth-row">
-      <label for="inputName">Dein Name (min. 6 Zeichen)</label>
-      <input id="inputName" placeholder="z.B. NeonRider99" />
-    </div>
-
-    <div class="auth-row">
-      <label for="inputEmail">E-Mail</label>
-      <input id="inputEmail" type="email" placeholder="deinname@example.com" />
-    </div>
-
-    <div class="auth-row">
-      <label for="inputPass">Passwort</label>
-      <input id="inputPass" type="password" placeholder="Passwort" />
-    </div>
-
-    <div class="auth-row">
-      <label for="inputLang">Sprache</label>
-      <select id="inputLang">
-        <option value="de">Deutsch</option>
-        <option value="en">English</option>
-        <option value="hu">Magyar</option>
-        <option value="fr">Français</option>
-        <option value="pl">Polski</option>
-        <option value="zh">中文</option>
-        <option value="es">Español</option>
-        <option value="it">Italiano</option>
-        <option value="tr">Türkçe</option>
-        <option value="ru">Русский</option>
-      </select>
-    </div>
-
-    <div class="auth-row">
-      <label for="inputAvatar">Avatar (Emoji)</label>
-      <input id="inputAvatar" placeholder="🦋 😎 👾 🔥 🙂" />
-    </div>
-
-    <div class="auth-row">
-      <label for="inputColor">Name-Farbe (Neon)</label>
-      <input id="inputColor" placeholder="#ff00d9" value="#ff00d9" />
-    </div>
-
-    <div id="errorBox" style="color:#ff7b7b;text-shadow:0 0 6px #ff0000;font-size:0.7rem;min-height:1rem;text-align:center;"></div>
-
-    <div class="auth-btn" id="authSubmitBtn">Los geht's</div>
-
-    <div class="small-note" style="font-size:0.6rem;line-height:0.9rem;color:#8a8a8a;text-align:center;">
-      Geschützte Namen:<br/>
-      DeepButterflyMusic, Dethoxia,<br/>
-      DarkInfernal, Dethox<br/>
-      sind reserviert.<br/>
-      Beleidigende / sexuelle Namen sind verboten.
-    </div>
-  </div>
-</div>
-
-<script>
-// Wichtig: jetzt ist API_BASE einfach leer, weil dieselbe Domain benutzt wird.
-const API_BASE = "";
-
-// (Ab hier kommt dein kompletter <script>-Inhalt aus deiner index.html:
-// applyUILanguage, lobbyTranslations, Login-Handler, loadMessages,
-// loadOnline, loadProfile, usw. – 1:1 reinkopieren, aber
-// die Zeile mit const API_BASE = "..."; NICHT doppelt machen.)
-</script>
-
-</body>
-</html>`);
-});
-
-// -------------------------------------------------
-// SERVER START
-// -------------------------------------------------
+// ---------------------------------------------
+// START SERVER
+// ---------------------------------------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
-  console.log("✅ ButterflyMusic Freunde App läuft auf Port " + PORT);
+  console.log(`✅ ButterflyMusic Freunde App Backend läuft auf Port ${PORT}`);
 });
 
 
