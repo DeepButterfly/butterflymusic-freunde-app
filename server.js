@@ -3,25 +3,151 @@ const bodyParser = require("body-parser");
 const cors = require("cors");
 const bcrypt = require("bcryptjs");
 
-const {
-  users,
-  roles,
-  SYSTEM_PROTECTED_NAMES,
-  BANNED_WORDS,
-  LINKED_ACCOUNTS,
-  lobbyMessages,
-  onlineUsers,
-  ECONOMY,
-  LEVEL_CFG,
-} = require("./data.js");
+// -----------------------------
+// In-Memory Daten / Config
+// -----------------------------
+const roles = {
+  OWNER: "owner",
+  ADMIN: "admin",
+  MOD: "mod",
+  USER: "user",
+};
 
-const app = express();
-app.use(cors());
-app.use(bodyParser.json());
+const SYSTEM_PROTECTED_NAMES = [
+  "deepbutterflymusic",
+  "dethoxia",
+  "darkinfernal",
+  "dethox",
+];
 
-// -------------------------------------------------
+const BANNED_WORDS = [
+  "pimmel",
+  "schlampe",
+  "fotze",
+  "hurensohn",
+  "nutte",
+  "arsch",
+  "sex",
+  "fick",
+  "ficken",
+  "dick",
+  "cock",
+  "pussy",
+  "penis",
+  "titte",
+  "titten",
+  "boobs"
+];
+
+const LINKED_ACCOUNTS = {
+  darkinfernal: "dethox",
+  dethox: "darkinfernal",
+};
+
+const users = [
+  {
+    id: "1",
+    name: "DeepButterflyMusic",
+    normalizedName: "deepbutterflymusic",
+    email: "owner@example.com",
+    // ACHTUNG: für dich lokal ist das Klartext, bcrypt wird erst bei neuen Usern benutzt
+    password: "supergeheim",
+    avatar: "🦋",
+    neonColor: "#ff00d9",
+    language: "de",
+    role: roles.OWNER,
+    level: 1,
+    xp: 0,
+    coins: 50000,
+    blocked: [],
+    profileNote: "Be nice or leave ✨",
+    canBeBlocked: false
+  },
+  {
+    id: "2",
+    name: "Dethoxia",
+    normalizedName: "dethoxia",
+    email: "alt-owner@example.com",
+    password: "supergeheim2",
+    avatar: "😎",
+    neonColor: "#00ffff",
+    language: "en",
+    role: roles.ADMIN,
+    level: 1,
+    xp: 0,
+    coins: 20000,
+    blocked: [],
+    profileNote: "Co-Admin Account",
+    canBeBlocked: false
+  },
+  {
+    id: "3",
+    name: "DarkInfernal",
+    normalizedName: "darkinfernal",
+    email: "darkinfernal@example.com",
+    password: "infernal123",
+    avatar: "🔥",
+    neonColor: "#ff3300",
+    language: "de",
+    role: roles.ADMIN,
+    level: 3,
+    xp: 50,
+    coins: 15000,
+    blocked: [],
+    profileNote: "Admin / Partner-Account",
+    canBeBlocked: false
+  },
+  {
+    id: "4",
+    name: "Dethox",
+    normalizedName: "dethox",
+    email: "dethox@example.com",
+    password: "infernal123",
+    avatar: "👾",
+    neonColor: "#00ffaa",
+    language: "de",
+    role: roles.ADMIN,
+    level: 3,
+    xp: 50,
+    coins: 15000,
+    blocked: [],
+    profileNote: "Zweit-Account von DarkInfernal",
+    canBeBlocked: false
+  }
+];
+
+// Lobby Chat Speicher
+const lobbyMessages = [
+  {
+    fromUserId: "1",
+    avatar: "🦋",
+    displayName: "DeepButterflyMusic",
+    neonColor: "#ff00d9",
+    role: roles.OWNER,
+    text: "Willkommen in der ButterflyMusic Freunde App 💜 Bitte bleibt respektvoll.",
+    timestamp: Date.now(),
+  }
+];
+
+const onlineUsers = new Set(["1", "2", "3", "4"]);
+
+const ECONOMY = {
+  TOTAL_POOL: 100000000,
+  COINS_PER_30_MIN: 50,
+  MOD_START: 5000,
+  ADMIN_START: 15000,
+  USER_START: 0,
+  OWNER_START: 50000,
+};
+
+const LEVEL_CFG = {
+  MAX_LEVEL: 500,
+  XP_PER_LEVEL: 100,
+};
+
+// -----------------------------
 // Hilfsfunktionen
-// -------------------------------------------------
+// -----------------------------
 function normalizeName(str) {
   return (str || "")
     .toLowerCase()
@@ -47,52 +173,39 @@ function findUserByName(nameRaw) {
   return users.find((u) => u.normalizedName === n);
 }
 
-function getLinkedUser(user) {
-  const partnerName = LINKED_ACCOUNTS[user.normalizedName];
-  if (partnerName) {
-    const partner = users.find((u) => u.normalizedName === partnerName);
-    if (partner) return partner;
-  }
-  return null;
-}
-
 function canBlock(blocker, target) {
-  // Admins / Mods / Owner / geschützte Namen dürfen NICHT geblockt werden
   if (target.canBeBlocked === false) return false;
   if ([roles.OWNER, roles.ADMIN, roles.MOD].includes(target.role)) return false;
   return true;
 }
 
-function addCoins(user, amount) {
-  user.coins += amount;
-}
-
 function translateMessage(text, lang) {
-  // Platzhalter für echte Übersetzung
+  // später echter Übersetzer - jetzt Platzhalter
   return `[${lang}] ${text}`;
 }
 
 function giveXP(user, xp) {
-  user.xp += xp;
+  user.xp = (user.xp || 0) + xp;
   while (user.xp >= LEVEL_CFG.XP_PER_LEVEL) {
     user.xp -= LEVEL_CFG.XP_PER_LEVEL;
-    user.level += 1;
+    user.level = (user.level || 1) + 1;
     if (user.level > LEVEL_CFG.MAX_LEVEL) {
-      // Prestige-Reset über Level 500
+      // Prestige Reset nach Level 500
       user.level = 1;
-      // Hier könnte ein dauerhaftes "Legend"-Badge kommen
+      // hier könnte man dauerhaftes Badge speichern
     }
   }
 }
 
-// checke ob ein angegebener Anzeigename schmutzige/verbotene Wörter enthält
-function containsBannedWord(nameRaw) {
-  const lower = (nameRaw || "").toLowerCase();
-  return BANNED_WORDS.some((w) => lower.includes(w));
-}
+// -----------------------------
+// Express Setup
+// -----------------------------
+const app = express();
+app.use(cors());
+app.use(bodyParser.json());
 
 // -------------------------------------------------
-// Registrierung
+// API: Registrierung
 // -------------------------------------------------
 app.post("/api/register", async (req, res) => {
   const { name, email, password, language, avatar, neonColor } = req.body;
@@ -105,32 +218,26 @@ app.post("/api/register", async (req, res) => {
     return res.status(400).json({ error: "Name zu kurz." });
   }
 
-  // keine schmutzigen / sexuellen / beleidigenden Namen
-  if (containsBannedWord(name)) {
-    return res.status(400).json({
-      error: "Dieser Name ist nicht erlaubt.",
-    });
+  const lower = (name || "").toLowerCase();
+  if (BANNED_WORDS.some((w) => lower.includes(w))) {
+    return res.status(400).json({ error: "Dieser Name ist nicht erlaubt." });
   }
 
   const normalized = normalizeName(name);
 
-  // niemand darf geschützte Hauptnamen nehmen
   if (SYSTEM_PROTECTED_NAMES.includes(normalized)) {
     return res.status(403).json({ error: "Dieser Name ist reserviert." });
   }
 
-  // niemand darf bestehenden Namen faken durch 0->o usw.
   if (users.find((u) => u.normalizedName === normalized)) {
-    return res
-      .status(400)
-      .json({ error: "Name existiert schon / ist zu ähnlich." });
+    return res.status(400).json({ error: "Name existiert schon / zu ähnlich." });
   }
 
   if (findUserByEmail(email)) {
     return res.status(400).json({ error: "E-Mail schon vergeben." });
   }
 
-  // Passwort verschlüsseln
+  // Hash für neue User
   const hashed = await bcrypt.hash(password, 10);
 
   const newUser = {
@@ -147,8 +254,6 @@ app.post("/api/register", async (req, res) => {
     xp: 0,
     coins: ECONOMY.USER_START,
     blocked: [],
-    profileNote: "",
-    profilePic: null,
     canBeBlocked: true,
   };
 
@@ -171,32 +276,26 @@ app.post("/api/register", async (req, res) => {
 });
 
 // -------------------------------------------------
-// Login
+// API: Login
 // -------------------------------------------------
 app.post("/api/login", async (req, res) => {
   const { email, password } = req.body;
 
   const u = findUserByEmail(email || "");
   if (!u) {
-    return res
-      .status(401)
-      .json({ error: "Falsche E-Mail oder Passwort." });
+    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
   }
 
-  const okPw = await bcrypt
-    .compare(password || "", u.password)
-    .catch(() => false);
+  // bei den Default-Usern oben ist password noch Klartext.
+  // Deswegen: wenn bcrypt fehlschlägt, erlauben wir auch Klartextvergleich.
+  let okPw = false;
+  try {
+    okPw = await bcrypt.compare(password || "", u.password);
+  } catch (e) {
+    okPw = (password === u.password);
+  }
   if (!okPw) {
-    return res
-      .status(401)
-      .json({ error: "Falsche E-Mail oder Passwort." });
-  }
-
-  // Linked Account Rechte angleichen
-  const partner = getLinkedUser(u);
-  if (partner && partner.role !== u.role) {
-    partner.role = u.role;
-    partner.canBeBlocked = false;
+    return res.status(401).json({ error: "Falsche E-Mail oder Passwort." });
   }
 
   onlineUsers.add(u.id);
@@ -212,13 +311,12 @@ app.post("/api/login", async (req, res) => {
       avatar: u.avatar,
       neonColor: u.neonColor,
       language: u.language,
-      linkedAccount: partner ? partner.name : null,
     },
   });
 });
 
 // -------------------------------------------------
-// Lobby-Chat abrufen
+// API: Lobby Messages holen
 // -------------------------------------------------
 app.get("/api/lobby/messages", (req, res) => {
   const lang = req.query.lang || "de";
@@ -233,7 +331,7 @@ app.get("/api/lobby/messages", (req, res) => {
 });
 
 // -------------------------------------------------
-// Lobby-Chat neue Nachricht senden
+// API: Neue Lobby Nachricht
 // -------------------------------------------------
 app.post("/api/lobby/messages", (req, res) => {
   const { userId, text } = req.body;
@@ -255,15 +353,15 @@ app.post("/api/lobby/messages", (req, res) => {
 
   lobbyMessages.push(newMsg);
 
-  // Belohnung fürs Schreiben:
+  // XP / Coins Belohnung
   giveXP(u, 5);
-  addCoins(u, 1);
+  u.coins += 1;
 
   res.json({ ok: true });
 });
 
 // -------------------------------------------------
-// Wer ist online
+// API: Wer ist online?
 // -------------------------------------------------
 app.get("/api/online", (req, res) => {
   const list = users
@@ -280,108 +378,7 @@ app.get("/api/online", (req, res) => {
 });
 
 // -------------------------------------------------
-// Blockieren / Entblocken
-// -------------------------------------------------
-app.post("/api/block", (req, res) => {
-  const { byUserId, targetName } = req.body;
-
-  const blocker = users.find((u) => u.id === byUserId);
-  if (!blocker) {
-    return res.status(401).json({ error: "Blocker nicht gefunden." });
-  }
-
-  const target = findUserByName(targetName || "");
-  if (!target) {
-    return res.status(404).json({ error: "Ziel nicht gefunden." });
-  }
-
-  if (!canBlock(blocker, target)) {
-    return res.status(403).json({
-      error: "Diese Person darf nicht blockiert werden.",
-    });
-  }
-
-  if (!blocker.blocked.includes(target.id)) {
-    blocker.blocked.push(target.id);
-  }
-
-  res.json({ ok: true, blocked: blocker.blocked });
-});
-
-app.post("/api/unblock", (req, res) => {
-  const { byUserId, targetName } = req.body;
-
-  const blocker = users.find((u) => u.id === byUserId);
-  const target = findUserByName(targetName || "");
-
-  if (!blocker || !target) {
-    return res.status(404).json({ error: "User nicht gefunden." });
-  }
-
-  blocker.blocked = blocker.blocked.filter((id) => id !== target.id);
-
-  res.json({ ok: true, blocked: blocker.blocked });
-});
-
-// -------------------------------------------------
-// Rolle setzen (nur Owner = DeepButterflyMusic)
-app.post("/api/setRole", (req, res) => {
-  const { ownerId, targetName, newRole } = req.body;
-
-  const owner = users.find((u) => u.id === ownerId);
-  if (!owner || owner.role !== roles.OWNER) {
-    return res
-      .status(403)
-      .json({ error: "Nur der Besitzer darf Rollen setzen." });
-  }
-
-  const target = findUserByName(targetName || "");
-  if (!target) {
-    return res.status(404).json({ error: "Ziel nicht gefunden." });
-  }
-
-  if (![roles.ADMIN, roles.MOD, roles.USER].includes(newRole)) {
-    return res.status(400).json({ error: "Ungültige Rolle." });
-  }
-
-  // Rolle setzen
-  target.role = newRole;
-
-  // Coins anpassen
-  if (newRole === roles.ADMIN && target.coins < ECONOMY.ADMIN_START) {
-    target.coins = ECONOMY.ADMIN_START;
-  }
-  if (newRole === roles.MOD && target.coins < ECONOMY.MOD_START) {
-    target.coins = ECONOMY.MOD_START;
-  }
-
-  // Admins / Mods nicht blockbar
-  if ([roles.ADMIN, roles.MOD].includes(target.role)) {
-    target.canBeBlocked = false;
-  } else {
-    target.canBeBlocked = true;
-  }
-
-  // Linked Account synchronisieren
-  const partner = getLinkedUser(target);
-  if (partner) {
-    partner.role = newRole;
-    partner.canBeBlocked = false;
-  }
-
-  res.json({
-    ok: true,
-    target: {
-      name: target.name,
-      role: target.role,
-      coins: target.coins,
-      linked: partner ? partner.name : null,
-    },
-  });
-});
-
-// -------------------------------------------------
-// Profil eines Users
+// API: Profil abrufen
 // -------------------------------------------------
 app.get("/api/profile/:userId", (req, res) => {
   const userId = req.params.userId;
@@ -401,13 +398,12 @@ app.get("/api/profile/:userId", (req, res) => {
     coins: u.coins,
     level: u.level,
     xp: u.xp,
-    profileNote: u.profileNote,
-    profilePic: u.profilePic,
+    profileNote: u.profileNote || "",
   });
 });
 
 // -------------------------------------------------
-// Musik Upload (Kinderschutz / Jugendschutz: noch gesperrt)
+// API: Musik Upload (gesperrt)
 app.post("/api/music/upload", (req, res) => {
   return res.status(403).json({
     error: "Musik-Upload ist geschützt / Filter aktiv / kommt später.",
@@ -415,9 +411,57 @@ app.post("/api/music/upload", (req, res) => {
 });
 
 // -------------------------------------------------
-// Server starten (Render-kompatibel)
-const PORT = process.env.PORT || 3000;
+// FRONTEND AUSLIEFERN
+// -------------------------------------------------
 
+// Die komplette HTML deiner App als String.
+// Wichtig: API_BASE zeigt auf dieselbe Domain (kein localhost mehr)
+const FRONT_HTML = `
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0" />
+<title>ButterflyMusic Freunde App</title>
+<style>
+/* (KÜRZUNG: hier kommt dein kompletter CSS aus index.html rein) */
+body { background:#000; color:#fff; font-family:sans-serif; }
+</style>
+</head>
+<body>
+<div id="app-root">Lädt ButterflyMusic Freunde App… 🦋</div>
+<script>
+// hier kommt dein komplettes JS aus index.html rein, nur:
+// const API_BASE = "" wird ersetzt durch leeren String,
+// weil wir jetzt auf derselben Domain laufen.
+
+const API_BASE = "";
+
+// Beispiel-Test:
+fetch("/api/lobby/messages?lang=de")
+ .then(r=>r.json())
+ .then(d=>{
+   const root=document.getElementById("app-root");
+   root.innerHTML = "<pre style='white-space:pre-wrap;color:#0ff'>" + JSON.stringify(d,null,2) + "</pre>";
+ })
+ .catch(e=>{
+   document.getElementById("app-root").textContent = "Fehler beim Laden 😭";
+});
+</script>
+</body>
+</html>
+`;
+
+// Diese Route liefert die Seite, wenn jemand die Hauptadresse öffnet
+app.get("/", (req, res) => {
+  res.setHeader("Content-Type", "text/html; charset=utf-8");
+  res.send(FRONT_HTML);
+});
+
+// -------------------------------------------------
+// Server starten (Render-kompatibel)
+// -------------------------------------------------
+const PORT = process.env.PORT || 3000;
 app.listen(PORT, "0.0.0.0", () => {
   console.log(`✅ ButterflyMusic Freunde App Server läuft auf Port ${PORT}`);
 });
