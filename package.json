@@ -1,17 +1,16 @@
 {
-  "name": "butterflymusic-freunde-app",
+  "name": "butterflymusic-freunde-app-backend",
   "version": "1.0.0",
-  "description": "ButterflyMusic Freunde App Backend (Chat, Login, Profil, Coins, Level)",
+  "description": "Backend für ButterflyMusic Freunde App",
   "main": "server.js",
+  "type": "module",
   "scripts": {
     "start": "node server.js"
   },
   "dependencies": {
+    "body-parser": "^1.20.3",
     "cors": "^2.8.5",
     "express": "^4.19.2"
-  },
-  "engines": {
-    "node": ">=18 <23"
   }
 }
 
